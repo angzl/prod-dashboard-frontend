@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 
 function BSStatusChart({ partners }) {
+  const apiBase = import.meta.env.VITE_API_URL || '';
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -12,7 +14,7 @@ function BSStatusChart({ partners }) {
     }
     const params = new URLSearchParams();
     partners.forEach(p => params.append('partners', p));
-    fetch(`/api/snapshot?${params.toString()}`)
+    fetch(`${apiBase}/api/snapshot?${params.toString()}`)
       .then(res => res.json())
       .then(snapshot => {
         // Суммируем по всем партнёрам
@@ -32,7 +34,7 @@ function BSStatusChart({ partners }) {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [partners]);
+  }, [partners, apiBase]);
 
   if (loading) return <div style={{ color: '#8899bb' }}>Загрузка состояния БС...</div>;
   if (!data || data.total === 0) return <div style={{ color: '#8899bb' }}>Нет данных о БС</div>;

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 
 function Graph({ partner, days = 30 }) {
+  const apiBase = import.meta.env.VITE_API_URL || '';
+
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -9,7 +11,7 @@ function Graph({ partner, days = 30 }) {
   useEffect(() => {
     if (!partner) return;
     setLoading(true);
-    fetch(`/api/graph_data?partner=${encodeURIComponent(partner)}&days=${days}`)
+    fetch(`${apiBase}/api/graph_data?partner=${encodeURIComponent(partner)}&days=${days}`)
       .then(res => {
         if (!res.ok) throw new Error('Ошибка загрузки данных');
         return res.json();
@@ -22,7 +24,7 @@ function Graph({ partner, days = 30 }) {
         setError(err.message);
         setLoading(false);
       });
-  }, [partner, days]);
+  }, [partner, days, apiBase]);
 
   if (loading) return <div>Загрузка графиков...</div>;
   if (error) return <div>Ошибка: {error}</div>;

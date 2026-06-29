@@ -7,6 +7,8 @@ import BSStatusChart from './components/BSStatusChart';
 import './App.css';
 
 function App() {
+  const apiBase = import.meta.env.VITE_API_URL || '';
+
   const [partners, setPartners] = useState([]);
   const [selectedPartner, setSelectedPartner] = useState('');
   const [days, setDays] = useState(30);
@@ -14,20 +16,20 @@ function App() {
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-    fetch('/api/partners')
+    fetch(`${apiBase}/api/partners`)
       .then(res => res.json())
       .then(data => {
         setPartners(data);
         if (data.length > 0) setSelectedPartner(data[0]);
         const params = new URLSearchParams();
         data.forEach(p => params.append('partners', p));
-        fetch(`/api/snapshot?${params.toString()}`)
+        fetch(`${apiBase}/api/snapshot?${params.toString()}`)
           .then(res => res.json())
           .then(snap => setSnapshot(snap))
           .catch(() => {});
       })
       .catch(console.error);
-  }, []);
+  }, [apiBase]);
 
   const handlePartnerChange = (e) => setSelectedPartner(e.target.value);
   const handleDaysChange = (e) => setDays(Number(e.target.value));

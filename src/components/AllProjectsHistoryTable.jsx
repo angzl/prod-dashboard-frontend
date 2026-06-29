@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 function AllProjectsHistoryTable({ partners, days = 30, title }) {
+  const apiBase = import.meta.env.VITE_API_URL || '';
+
   const [allData, setAllData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -14,7 +16,7 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
     setError(null);
 
     const fetchPromises = partners.map(partner =>
-      fetch(`/api/history?partner=${encodeURIComponent(partner)}&days=${days}`)
+      fetch(`${apiBase}/api/history?partner=${encodeURIComponent(partner)}&days=${days}`)
         .then(res => {
           if (!res.ok) throw new Error(`Ошибка загрузки для ${partner}`);
           return res.json();
@@ -40,7 +42,7 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
         setError(err.message);
         setLoading(false);
       });
-  }, [partners, days]);
+  }, [partners, days, apiBase]);
 
   if (loading) return <div style={{ color: '#b0c4e0' }}>Загрузка истории...</div>;
   if (error) return <div style={{ color: '#ff6b6b' }}>Ошибка: {error}</div>;

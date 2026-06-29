@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
 function PartnerTable({ partners }) {
+  const apiBase = import.meta.env.VITE_API_URL || '';
+
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,7 +15,7 @@ function PartnerTable({ partners }) {
     setLoading(true);
     const params = new URLSearchParams();
     partners.forEach(p => params.append('partners', p));
-    fetch(`/api/snapshot?${params.toString()}`)
+    fetch(`${apiBase}/api/snapshot?${params.toString()}`)
       .then(res => {
         if (!res.ok) throw new Error('Ошибка загрузки данных');
         return res.json();
@@ -26,7 +28,7 @@ function PartnerTable({ partners }) {
         setError(err.message);
         setLoading(false);
       });
-  }, [partners]);
+  }, [partners, apiBase]);
 
   if (loading) return <div>Загрузка таблицы...</div>;
   if (error) return <div>Ошибка: {error}</div>;
