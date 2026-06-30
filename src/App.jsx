@@ -16,7 +16,7 @@ function App() {
   const [days, setDays] = useState(30);
   const [snapshot, setSnapshot] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
-  const [compareProjects, setCompareProjects] = useState([]); // для мультиселекта
+  const [compareProjects, setCompareProjects] = useState([]);
 
   useEffect(() => {
     fetch(`${apiBase}/api/partners`)
@@ -37,7 +37,6 @@ function App() {
   const handlePartnerChange = (e) => setSelectedPartner(e.target.value);
   const handleDaysChange = (e) => setDays(Number(e.target.value));
 
-  // Преобразуем список партнёров для react-select
   const partnerOptions = partners.map(p => ({ value: p, label: p }));
 
   return (
@@ -60,7 +59,7 @@ function App() {
         </button>
       </div>
 
-      {/* Содержимое вкладки "Сводка" */}
+      {/* Содержимое вкладки "Сводка" – без сравнения */}
       {activeTab === 'overview' && (
         <div className="tab-content">
           <div className="dashboard-row">
@@ -77,6 +76,39 @@ function App() {
           <div className="card">
             <div className="card-header">📋 Сводка по всем проектам</div>
             <PartnerTable partners={partners} />
+          </div>
+
+          <div className="card">
+            <AllProjectsHistoryTable partners={partners} days={365} />
+          </div>
+        </div>
+      )}
+
+      {/* Содержимое вкладки "Детализация" – с фильтрами, сравнением, историей и графиками */}
+      {activeTab === 'detail' && (
+        <div className="tab-content">
+          {/* Фильтры */}
+          <div className="card filters-card">
+            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div>
+                <label style={{ marginRight: '8px', color: '#b0c4e0' }}>Проект:</label>
+                <select value={selectedPartner} onChange={handlePartnerChange}>
+                  {partners.map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ marginRight: '8px', color: '#b0c4e0' }}>Период (дней):</label>
+                <select value={days} onChange={handleDaysChange}>
+                  <option value={7}>7</option>
+                  <option value={14}>14</option>
+                  <option value={30}>30</option>
+                  <option value={60}>60</option>
+                  <option value={90}>90</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* НОВЫЙ БЛОК: Сравнение проектов */}
@@ -128,38 +160,7 @@ function App() {
             <MultiGraph projects={compareProjects.map(p => p.value)} days={days} />
           </div>
 
-          <div className="card">
-            <AllProjectsHistoryTable partners={partners} days={365} />
-          </div>
-        </div>
-      )}
-
-      {/* Содержимое вкладки "Детализация" */}
-      {activeTab === 'detail' && (
-        <div className="tab-content">
-          <div className="card filters-card">
-            <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div>
-                <label style={{ marginRight: '8px', color: '#b0c4e0' }}>Проект:</label>
-                <select value={selectedPartner} onChange={handlePartnerChange}>
-                  {partners.map(p => (
-                    <option key={p} value={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ marginRight: '8px', color: '#b0c4e0' }}>Период (дней):</label>
-                <select value={days} onChange={handleDaysChange}>
-                  <option value={7}>7</option>
-                  <option value={14}>14</option>
-                  <option value={30}>30</option>
-                  <option value={60}>60</option>
-                  <option value={90}>90</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
+          {/* Детальная история для одного проекта */}
           <div className="card">
             <div className="card-header">📈 Детальная история</div>
             <AllProjectsHistoryTable
@@ -170,6 +171,7 @@ function App() {
             />
           </div>
 
+          {/* Графики для одного проекта */}
           <div className="card">
             <div className="card-header">📊 Графики</div>
             {selectedPartner && <Graph partner={selectedPartner} days={days} />}
