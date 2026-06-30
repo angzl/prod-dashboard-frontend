@@ -29,7 +29,16 @@ function App() {
         data.forEach(p => params.append('partners', p));
         fetch(`${apiBase}/api/snapshot?${params.toString()}`)
           .then(res => res.json())
-          .then(snap => setSnapshot(snap))
+          .then(snap => {
+            setSnapshot(snap);
+            // если snap есть, а selectedPartner не совпадает с партнёром в snap, переустановим
+            if (snap.length > 0 && data.length > 0) {
+              const firstPartner = snap[0].partner;
+              if (!selectedPartner || !snap.find(p => p.partner === selectedPartner)) {
+                setSelectedPartner(firstPartner);
+              }
+            }
+          })
           .catch(() => {});
       })
       .catch(console.error);
@@ -40,8 +49,10 @@ function App() {
 
   const partnerOptions = partners.map(p => ({ value: p, label: p }));
 
-  // Находим данные для выбранного проекта (для карточек в детализации)
-  const currentProjectData = snapshot.find(p => p.partner === selectedPartner);
+  // Ищем данные для выбранного проекта (регистронезависимо)
+  const currentProjectData = snapshot.find(p =>
+    p.partner && p.partner.toLowerCase() === selectedPartner?.toLowerCase()
+  );
 
   return (
     <div className="App">
@@ -120,10 +131,16 @@ function App() {
             </div>
           </div>
 
-          {/* Карточки для выбранного проекта */}
-          {selectedPartner && currentProjectData && (
+          {/* Карточки для выбранного проекта — показываем, даже если currentProjectData пуст, но выводим заглушку */}
+          {selectedPartner && (
             <div className="card" style={{ padding: '16px 20px' }}>
-              <ProjectMetricCards projectData={currentProjectData} partner={selectedPartner} />
+              {currentProjectData ? (
+                <ProjectMetricCards projectData={currentProjectData} partner={selectedPartner} />
+              ) : (
+                <div style={{ color: '#6a7f9f', textAlign: 'center', padding: '20px 0' }}>
+                  Нет данных для проекта <strong>{selectedPartner}</strong>
+                </div>
+              )}
             </div>
           )}
 
