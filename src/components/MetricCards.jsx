@@ -90,4 +90,4 @@ function MetricCards({ partners, snapshot }) {
   );
 }
 
-export default MetricCards;s
+export default MetricCards;
