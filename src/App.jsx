@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import Select from 'react-select';
 import Graph from './components/Graph';
+import MultiGraph from './components/MultiGraph';
 import PartnerTable from './components/PartnerTable';
 import AllProjectsHistoryTable from './components/AllProjectsHistoryTable';
 import MetricCards from './components/MetricCards';
@@ -14,6 +16,7 @@ function App() {
   const [days, setDays] = useState(30);
   const [snapshot, setSnapshot] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [compareProjects, setCompareProjects] = useState([]); // для мультиселекта
 
   useEffect(() => {
     fetch(`${apiBase}/api/partners`)
@@ -33,6 +36,9 @@ function App() {
 
   const handlePartnerChange = (e) => setSelectedPartner(e.target.value);
   const handleDaysChange = (e) => setDays(Number(e.target.value));
+
+  // Преобразуем список партнёров для react-select
+  const partnerOptions = partners.map(p => ({ value: p, label: p }));
 
   return (
     <div className="App">
@@ -54,7 +60,7 @@ function App() {
         </button>
       </div>
 
-      {/* Содержимое вкладки "Сводка" – ВСЕ данные без фильтров */}
+      {/* Содержимое вкладки "Сводка" */}
       {activeTab === 'overview' && (
         <div className="tab-content">
           <div className="dashboard-row">
@@ -73,16 +79,64 @@ function App() {
             <PartnerTable partners={partners} />
           </div>
 
+          {/* НОВЫЙ БЛОК: Сравнение проектов */}
           <div className="card">
-            <AllProjectsHistoryTable partners={partners} days={365} /> {/* Все данные */}
+            <div className="card-header">📊 Сравнение проектов</div>
+            <div style={{ marginBottom: '16px' }}>
+              <Select
+                isMulti
+                options={partnerOptions}
+                value={compareProjects}
+                onChange={setCompareProjects}
+                placeholder="Выберите проекты для сравнения..."
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    backgroundColor: '#1a212e',
+                    borderColor: '#2a3344',
+                    color: '#e0e8f0',
+                  }),
+                  menu: (base) => ({
+                    ...base,
+                    backgroundColor: '#1a212e',
+                  }),
+                  option: (base, state) => ({
+                    ...base,
+                    backgroundColor: state.isFocused ? '#2a3344' : '#1a212e',
+                    color: '#e0e8f0',
+                  }),
+                  multiValue: (base) => ({
+                    ...base,
+                    backgroundColor: '#2a3a50',
+                    color: '#e0e8f0',
+                  }),
+                  multiValueLabel: (base) => ({
+                    ...base,
+                    color: '#e0e8f0',
+                  }),
+                  input: (base) => ({
+                    ...base,
+                    color: '#e0e8f0',
+                  }),
+                  placeholder: (base) => ({
+                    ...base,
+                    color: '#6a7f9f',
+                  }),
+                }}
+              />
+            </div>
+            <MultiGraph projects={compareProjects.map(p => p.value)} days={days} />
+          </div>
+
+          <div className="card">
+            <AllProjectsHistoryTable partners={partners} days={365} />
           </div>
         </div>
       )}
 
-      {/* Содержимое вкладки "Детализация" – с фильтрами */}
+      {/* Содержимое вкладки "Детализация" */}
       {activeTab === 'detail' && (
         <div className="tab-content">
-          {/* Локальные фильтры */}
           <div className="card filters-card">
             <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div>
