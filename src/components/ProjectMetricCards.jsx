@@ -2,7 +2,9 @@ import React from 'react';
 import { FaMicrochip, FaServer, FaClock, FaShieldAlt } from 'react-icons/fa';
 
 function ProjectMetricCards({ projectData, partner }) {
-  if (!projectData) return null;
+  if (!projectData) {
+    return <div style={{ color: '#6a7f9f' }}>Нет данных</div>;
+  }
 
   const total = parseInt(projectData.total_pu) || 0;
   const active = parseInt(projectData.pu_active) || 0;
@@ -44,9 +46,9 @@ function ProjectMetricCards({ projectData, partner }) {
   ];
 
   return (
-    <div className="metric-grid" style={{ marginBottom: '16px' }}>
+    <div className="metric-grid" style={{ marginBottom: '0px' }}>
       {cards.map((card, idx) => (
-        <div key={idx} className="metric-card">
+        <div key={idx} className="metric-card fade-in-up" style={{ animationDelay: `${idx * 0.05}s` }}>
           <div className="metric-icon">{card.icon}</div>
           <div className="metric-content">
             <div className="metric-label">{card.label}</div>

@@ -24,19 +24,17 @@ function App() {
       .then(res => res.json())
       .then(data => {
         setPartners(data);
-        if (data.length > 0) setSelectedPartner(data[0]);
+        if (data.length > 0) {
+          setSelectedPartner(data[0]);
+        }
         const params = new URLSearchParams();
         data.forEach(p => params.append('partners', p));
         fetch(`${apiBase}/api/snapshot?${params.toString()}`)
           .then(res => res.json())
           .then(snap => {
             setSnapshot(snap);
-            // если snap есть, а selectedPartner не совпадает с партнёром в snap, переустановим
-            if (snap.length > 0 && data.length > 0) {
-              const firstPartner = snap[0].partner;
-              if (!selectedPartner || !snap.find(p => p.partner === selectedPartner)) {
-                setSelectedPartner(firstPartner);
-              }
+            if (snap.length > 0 && !selectedPartner) {
+              setSelectedPartner(snap[0].partner);
             }
           })
           .catch(() => {});
@@ -49,16 +47,13 @@ function App() {
 
   const partnerOptions = partners.map(p => ({ value: p, label: p }));
 
-  // Ищем данные для выбранного проекта (регистронезависимо)
-  const currentProjectData = snapshot.find(p =>
-    p.partner && p.partner.toLowerCase() === selectedPartner?.toLowerCase()
-  );
+  // Находим данные для выбранного проекта (строгое сравнение)
+  const currentProjectData = snapshot.find(p => p.partner === selectedPartner);
 
   return (
     <div className="App">
       <h1>📊 Prod Monitoring Dashboard</h1>
 
-      {/* Вкладки */}
       <div className="tabs">
         <button
           className={activeTab === 'overview' ? 'tab active' : 'tab'}
@@ -80,7 +75,6 @@ function App() {
         </button>
       </div>
 
-      {/* Вкладка "Сводка" */}
       {activeTab === 'overview' && (
         <div className="tab-content">
           <div className="dashboard-row">
@@ -105,7 +99,6 @@ function App() {
         </div>
       )}
 
-      {/* Вкладка "Детализация" (один проект + карточки) */}
       {activeTab === 'detail' && (
         <div className="tab-content">
           <div className="card filters-card">
@@ -131,14 +124,15 @@ function App() {
             </div>
           </div>
 
-          {/* Карточки для выбранного проекта — показываем, даже если currentProjectData пуст, но выводим заглушку */}
+          {/* Карточки для выбранного проекта */}
           {selectedPartner && (
             <div className="card" style={{ padding: '16px 20px' }}>
               {currentProjectData ? (
                 <ProjectMetricCards projectData={currentProjectData} partner={selectedPartner} />
               ) : (
                 <div style={{ color: '#6a7f9f', textAlign: 'center', padding: '20px 0' }}>
-                  Нет данных для проекта <strong>{selectedPartner}</strong>
+                  ⚠️ Данные для проекта <strong>{selectedPartner}</strong> не найдены.
+                  {snapshot.length === 0 && ' Срез ещё не загружен.'}
                 </div>
               )}
             </div>
@@ -161,7 +155,6 @@ function App() {
         </div>
       )}
 
-      {/* Вкладка "Сравнение" (несколько проектов) */}
       {activeTab === 'compare' && (
         <div className="tab-content">
           <div className="card">
