@@ -322,52 +322,57 @@ body {
   border-bottom: none;
 }
 
-/* ---- ФИКСАЦИЯ КОЛОНОК В ИСТОРИЧЕСКОЙ ТАБЛИЦЕ ---- */
-.hist-wrap .col-project,
-.hist-wrap .col-metric {
-  position: sticky;
-  z-index: 10;
-  background: var(--surface);
+/* ---- ФИКСАЦИЯ КОЛОНОК В ИСТОРИЧЕСКОЙ ТАБЛИЦЕ (переопределение) ---- */
+.hist-wrap {
+  position: relative;
+  overflow: auto;
+  max-height: 600px;
 }
-.hist-wrap .col-project {
-  left: 0;
-  min-width: 100px;
-  border-right: 2px solid var(--border);
+
+.hist-wrap table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
 }
-.hist-wrap .col-metric {
-  left: 100px;
-  min-width: 110px;
-  border-right: 2px solid var(--border);
-}
-.hist-wrap thead .col-project {
-  z-index: 110;
-  left: 0;
-}
-.hist-wrap thead .col-metric {
-  z-index: 110;
-  left: 100px;
-}
+
+/* Заголовки – фиксируем сверху */
 .hist-wrap thead th {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 30;
   background: var(--surface2);
+  border-bottom: 2px solid var(--border);
 }
-.hist-wrap tbody tr:nth-child(even) td:not(.col-project):not(.col-metric) {
+
+/* Фиксируем ПЕРВУЮ колонку (Метрика) */
+.hist-wrap .col-metric {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background: var(--surface);
+  border-right: 2px solid var(--border);
+}
+
+/* Заголовок первой колонки должен быть поверх данных */
+.hist-wrap thead .col-metric {
+  z-index: 40;
+  left: 0;
+}
+
+/* Все остальные ячейки – без позиционирования */
+.hist-wrap tbody td:not(.col-metric) {
+  position: static;
+}
+
+/* Чтобы фон первой колонки не перекрывал заголовок при скролле, 
+   у заголовка z-index выше */
+.hist-wrap thead th {
+  z-index: 30;
+}
+
+/* Для чересстрочной подсветки – фиксированные ячейки должны иметь тот же фон, что и строка */
+.hist-wrap tbody tr:nth-child(even) td.col-metric {
   background: rgba(255,255,255,0.02);
-}
-.hist-wrap .last-metric-row td {
-  border-bottom: 3px solid var(--accent2) !important;
-}
-.hist-wrap .project-separator td {
-  padding: 0 !important;
-  border: none !important;
-  background: transparent !important;
-}
-.hist-wrap .project-separator td.col-project,
-.hist-wrap .project-separator td.col-metric {
-  background: transparent !important;
-  border: none !important;
 }
 
 /* ---- АНИМАЦИИ ---- */
