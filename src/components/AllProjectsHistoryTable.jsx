@@ -70,128 +70,151 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
 
   // ---- Метрики ----
   const metrics = [
-    { key: 'total_on_platform', label: 'Всего ПУ', plain: true },
-    { key: 'active_pu', label: 'Активных', pctKey: 'active_pct' },
+    { key: 'total_on_platform', label: 'Всего ПУ', noBg: true },
+    { key: 'active_pu', label: 'Активных' },
     { key: 'active_pct', label: '% активных', isPct: true },
-    { key: 't0_now', label: 'Сбор Т0 сегодня', pctKey: 't0_now_pct' },
+    { key: 't0_now', label: 'Сбор Т0 сегодня' },
     { key: 't0_now_pct', label: '%', isPct: true },
-    { key: 't0_prev_day', label: 'Сбор Т0 вчера', pctKey: 't0_prev_day_pct' },
+    { key: 't0_prev_day', label: 'Сбор Т0 вчера' },
     { key: 't0_prev_day_pct', label: '%', isPct: true },
-    { key: 't0_three_days', label: 'Сбор Т0 3 дня', pctKey: 't0_three_days_pct' },
+    { key: 't0_three_days', label: 'Сбор Т0 3 дня' },
     { key: 't0_three_days_pct', label: '%', isPct: true },
     { key: 'gap_pct', label: 'Разрыв акт→Т0-3', isPct: true, invert: true },
-    { key: 'bs_total', label: 'БС всего', plain: true },
-    { key: 'bs_online', label: 'БС онлайн', pctKey: 'bs_metric_pct' },
-    { key: 'bs_metric_pct', label: '% БС', isPct: true },
+    { key: 'bs_total', label: 'БС всего', noBg: true },
+    { key: 'bs_online', label: 'БС онлайн' },
+    { key: 'bs_metric_pct', label: '% БС', isPct: true, invert: true },
   ];
 
   const fmt = (num) => {
     if (num === undefined || num === null) return '—';
     return Number(num).toLocaleString('ru-RU');
   };
+  const fmtPct = (num) => {
+    if (num === undefined || num === null) return '—';
+    return Number(num).toFixed(1) + '%';
+  };
 
-  // ---- Градиентная заливка (как в примере) ----
-  // Для каждой строки (метрики) вычисляем среднее значение по дням,
-  // затем каждый день окрашиваем относительно этого среднего.
+  // ---- Для каждого проекта вычисляем средние по каждой метрике ----
+  const projectMeans = {};
+  Object.keys(projectGrouped).forEach(partner => {
+    const grouped = projectGrouped[partner];
+    const means = {};
+    metrics.forEach(m => {
+      const vals = sortedDates
+        .map(date => {
+          const row = grouped[date];
+          if (!row) return null;
+          let val = row[m.key];
+          if (m.isPct) val = parseFloat(val);
+          else val = parseFloat(val);
+          return isNaN(val) ? null : val;
+        })
+        .filter(v => v !== null);
+      means[m.key] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    });
+    projectMeans[partner] = means;
+  });
+
+  // ---- Градиент (плавный, красный-жёлтый-зелёный) ----
+  const getGradientStyle = (value, mean, invert = false) => {
+    if (value === undefined || value === null || isNaN(value) || mean === 0) {
+      return { bg: 'transparent', color: '#8892a4' };
+    }
+    const maxDev = Math.max(Math.abs(value - mean), 0.001);
+    let t = (value - mean) / maxDev;
+    if (invert) t = -t;
+    t = Math.max(-1, Math.min(1, t));
+    const intensity = Math.abs(t);
+    let r, g, b;
+    if (t > 0) {
+      const ratio = intensity;
+      r = Math.round(255 - (255 - 46) * ratio);
+      g = Math.round(255 - (255 - 204) * ratio);
+      b = Math.round(0 + 113 * ratio);
+    } else {
+      const ratio = intensity;
+      r = Math.round(255 - (255 - 231) * ratio);
+      g = Math.round(255 - (255 - 76) * ratio);
+      b = Math.round(0 + 60 * ratio);
+    }
+    const bg = `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    const textColor = brightness > 140 ? '#0a0e17' : '#f0f4fa';
+    return { bg, color: textColor };
+  };
+
   const projectList = Object.keys(projectGrouped).sort();
 
-  // Если проектов несколько, используем первый (или делаем общий цикл)
-  // Но в текущем использовании partners – это либо один проект (детализация) либо все (сводка)
-  // Для простоты будем обрабатывать каждый проект отдельно.
-  // Однако в вашем коде AllProjectsHistoryTable используется и для всех проектов,
-  // поэтому мы будем рендерить таблицу для каждого проекта отдельно.
-
-  // ---- Рендеринг ----
-  const renderProjectTable = (partner) => {
+  // ---- Рендеринг для одного проекта (или всех) ----
+  const renderProject = (partner) => {
     const grouped = projectGrouped[partner];
-    if (!grouped || Object.keys(grouped).length === 0) return null;
-
-    // Для каждого дня получаем значения
-    const days = sortedDates;
-    const rows = metrics.map(metric => {
-      const vals = days.map(date => {
-        const row = grouped[date];
-        if (!row) return null;
-        let val = row[metric.key];
-        if (metric.pctKey) val = row[metric.pctKey];
-        return parseFloat(val);
-      });
-      // Вычисляем среднее для строки (только для числовых, не plain)
-      const valid = vals.filter(v => v !== null && !isNaN(v));
-      const mean = valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
-      return { ...metric, vals, mean };
-    });
-
-    // Интерполяция цвета (красный-жёлтый-зелёный)
-    const getColor = (value, mean, invert = false) => {
-      if (value === null || isNaN(value) || mean === 0) return { bg: 'transparent', color: '#8892a4' };
-      const maxDev = Math.max(Math.abs(value - mean), 0.001);
-      let t = (value - mean) / maxDev;
-      if (invert) t = -t;
-      t = Math.max(-1, Math.min(1, t));
-      const intensity = Math.abs(t);
-      let r, g, b;
-      if (t > 0) {
-        const ratio = intensity;
-        r = Math.round(255 - (255 - 46) * ratio);
-        g = Math.round(255 - (255 - 204) * ratio);
-        b = Math.round(0 + 113 * ratio);
-      } else {
-        const ratio = intensity;
-        r = Math.round(255 - (255 - 231) * ratio);
-        g = Math.round(255 - (255 - 76) * ratio);
-        b = Math.round(0 + 60 * ratio);
-      }
-      const bg = `rgb(${r}, ${g}, ${b})`;
-      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-      const color = brightness > 140 ? '#0a0e17' : '#f0f4fa';
-      return { bg, color };
-    };
+    const means = projectMeans[partner] || {};
 
     return (
-      <table>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left' }}>Метрика</th>
-            {days.map(date => <th key={date}>{date.slice(5)}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((metric, idx) => {
-            const isPlain = metric.plain;
-            const invert = metric.invert || false;
-            const mean = metric.mean;
-            return (
-              <tr key={idx}>
-                <td className="metric-name" style={{ fontWeight: 'normal' }}>{metric.label}</td>
-                {metric.vals.map((val, i) => {
-                  let display = '—';
-                  let style = { bg: 'transparent', color: '#8892a4' };
-                  if (val !== null && !isNaN(val)) {
-                    display = (metric.isPct || metric.key.includes('_pct') || metric.key === 'gap_pct') ? val.toFixed(1) + '%' : fmt(val);
-                    if (!isPlain) {
-                      const color = getColor(val, mean, invert);
-                      style = { bg: color.bg, color: color.color };
+      <React.Fragment key={partner}>
+        {projectList.length > 1 && (
+          <div style={{ padding: '8px 12px', fontWeight: 600, color: '#a5b4fc', background: 'rgba(99,102,241,0.1)', borderBottom: '1px solid var(--border)' }}>
+            {partner}
+          </div>
+        )}
+        <table>
+          <thead>
+            <tr>
+              <th className="col-project" style={{ minWidth: '100px', textAlign: 'left' }}>Метрика</th>
+              {sortedDates.map(date => (
+                <th key={date} className="col-date" style={{ minWidth: '60px' }}>{date.slice(5)}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {metrics.map((metric, idx) => {
+              const isFirst = idx === 0;
+              const noBg = metric.noBg || false;
+              const invert = metric.invert || false;
+              const mean = means[metric.key] || 0;
+              const isPct = metric.isPct || false;
+
+              return (
+                <tr key={metric.key}>
+                  <td className="col-metric" style={{ fontWeight: isFirst ? 'bold' : 'normal', textAlign: 'left', paddingLeft: isFirst ? '0' : '16px' }}>
+                    {metric.label}
+                  </td>
+                  {sortedDates.map(date => {
+                    const row = grouped[date];
+                    let display = '—';
+                    let style = { bg: 'transparent', color: '#8892a4' };
+                    if (row) {
+                      const raw = row[metric.key];
+                      if (isPct || metric.key === 'gap_pct' || metric.key === 'bs_metric_pct') {
+                        display = fmtPct(raw);
+                      } else {
+                        display = fmt(raw);
+                      }
+                      if (!noBg) {
+                        const val = parseFloat(raw);
+                        if (!isNaN(val) && mean !== 0) {
+                          style = getGradientStyle(val, mean, invert);
+                        }
+                      }
                     }
-                  }
-                  return <td key={i} style={{ backgroundColor: style.bg, color: style.color }}>{display}</td>;
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    return (
+                      <td key={date} style={{ backgroundColor: style.bg, color: style.color }}>
+                        {display}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </React.Fragment>
     );
   };
 
   return (
     <div className="hist-wrap">
-      {projectList.map(partner => (
-        <div key={partner}>
-          {projectList.length > 1 && <div style={{ padding: '10px 12px', fontWeight: 600, color: '#a5b4fc', background: 'rgba(99,102,241,0.1)', borderBottom: '1px solid var(--border)' }}>{partner}</div>}
-          {renderProjectTable(partner)}
-        </div>
-      ))}
+      {projectList.map(partner => renderProject(partner))}
     </div>
   );
 }
