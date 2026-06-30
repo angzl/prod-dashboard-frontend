@@ -6,6 +6,7 @@ import PartnerTable from './components/PartnerTable';
 import AllProjectsHistoryTable from './components/AllProjectsHistoryTable';
 import MetricCards from './components/MetricCards';
 import BSStatusChart from './components/BSStatusChart';
+import ProjectMetricCards from './components/ProjectMetricCards';
 import './App.css';
 
 function App() {
@@ -39,11 +40,14 @@ function App() {
 
   const partnerOptions = partners.map(p => ({ value: p, label: p }));
 
+  // Находим данные для выбранного проекта (для карточек в детализации)
+  const currentProjectData = snapshot.find(p => p.partner === selectedPartner);
+
   return (
     <div className="App">
       <h1>📊 Prod Monitoring Dashboard</h1>
 
-      {/* Три вкладки */}
+      {/* Вкладки */}
       <div className="tabs">
         <button
           className={activeTab === 'overview' ? 'tab active' : 'tab'}
@@ -90,7 +94,7 @@ function App() {
         </div>
       )}
 
-      {/* Вкладка "Детализация" (один проект) */}
+      {/* Вкладка "Детализация" (один проект + карточки) */}
       {activeTab === 'detail' && (
         <div className="tab-content">
           <div className="card filters-card">
@@ -115,6 +119,13 @@ function App() {
               </div>
             </div>
           </div>
+
+          {/* Карточки для выбранного проекта */}
+          {selectedPartner && currentProjectData && (
+            <div className="card" style={{ padding: '16px 20px' }}>
+              <ProjectMetricCards projectData={currentProjectData} partner={selectedPartner} />
+            </div>
+          )}
 
           <div className="card">
             <div className="card-header">📈 Детальная история</div>
