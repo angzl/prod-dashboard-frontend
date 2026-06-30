@@ -106,8 +106,9 @@ body {
 .kpi-red    { color: #f87171; }
 .kpi-plain  { color: var(--text); }
 
-/* ---- SECTION TITLE ---- */
-.section-title {
+/* ---- SECTION TITLE (для карточек) ---- */
+.section-title,
+.card-header {
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
@@ -117,7 +118,7 @@ body {
   gap: 8px;
 }
 
-/* ---- ОБЩИЕ КАРТОЧКИ (для совместимости) ---- */
+/* ---- ОБЩИЕ КАРТОЧКИ ---- */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
