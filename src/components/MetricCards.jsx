@@ -1,5 +1,4 @@
 import React from 'react';
-import { FaMicrochip, FaServer, FaClock, FaShieldAlt } from 'react-icons/fa';
 import { useCountUp } from '../hooks/useCountUp';
 
 function MetricCards({ partners, snapshot }) {
@@ -31,51 +30,64 @@ function MetricCards({ partners, snapshot }) {
   const animatedActive = useCountUp(totalActive);
   const animatedBSOnline = useCountUp(totalBSOnline);
 
-  // Данные для карточек
+  // Определяем цвет для активных ПУ в зависимости от процента
+  const activeColor = avgActivePct >= 80 ? 'kpi-green' : (avgActivePct >= 60 ? 'kpi-yellow' : 'kpi-red');
+  const bsColor = avgBSPct >= 85 ? 'kpi-green' : (avgBSPct >= 70 ? 'kpi-yellow' : 'kpi-red');
+
+  // Карточки (без иконок, как в примере)
   const cards = [
-    {
-      label: 'Активных ПУ',
-      value: fmt(animatedActive),
-      sub: `${avgActivePct.toFixed(1)}% от общего числа`,
-      icon: <FaMicrochip size={32} />,
-      trend: '+12%',
-    },
     {
       label: 'Всего ПУ',
       value: fmt(animatedTotalPU),
       sub: `${partners.length} проектов`,
-      icon: <FaServer size={32} />,
+      cls: 'kpi-plain'
+    },
+    {
+      label: 'Активных ПУ',
+      value: fmt(animatedActive),
+      sub: `${avgActivePct.toFixed(1)}% активных`,
+      cls: activeColor
+    },
+    {
+      label: 'ТО сегодня',
+      value: fmt(snapshot.reduce((acc, r) => acc + (parseInt(r.today) || 0), 0)),
+      sub: 'сбор показаний',
+      cls: 'kpi-yellow'
+    },
+    {
+      label: 'БС всего',
+      value: fmt(totalBSTotal),
+      sub: 'базовых станций',
+      cls: 'kpi-plain'
     },
     {
       label: 'БС онлайн',
       value: fmt(animatedBSOnline),
-      sub: `${fmt(totalBSTotal)} всего, ${avgBSPct.toFixed(1)}% доступности`,
-      icon: <FaClock size={32} />,
+      sub: `${avgBSPct.toFixed(1)}% онлайн`,
+      cls: bsColor
     },
     {
-      label: 'Статус системы',
-      value: 'Стабильно',
-      sub: 'Нет критических проблем',
-      icon: <FaShieldAlt size={32} />,
-      trend: '✅',
-    },
+      label: 'Макс. разрыв',
+      value: snapshot.reduce((acc, r) => Math.max(acc, parseFloat(r.gap_pct) || 0), 0).toFixed(1) + '%',
+      sub: snapshot.reduce((acc, r) => {
+        const gap = parseFloat(r.gap_pct) || 0;
+        return gap > acc.gap ? { gap, partner: r.partner } : acc;
+      }, { gap: 0, partner: '' }).partner || '',
+      cls: 'kpi-red'
+    }
   ];
 
   return (
-    <div className="metric-grid">
+    <div className="kpi-grid">
       {cards.map((card, idx) => (
-        <div key={idx} className={`metric-card fade-in-up delay-${idx + 1}`}>
-          <div className="metric-icon">{card.icon}</div>
-          <div className="metric-content">
-            <div className="metric-label">{card.label}</div>
-            <div className="metric-value">{card.value}</div>
-            {card.sub && <div className="metric-sub">{card.sub}</div>}
-            {card.trend && <div className="metric-trend">{card.trend}</div>}
-          </div>
+        <div key={idx} className={`kpi-card fade-in-up delay-${(idx % 4) + 1}`}>
+          <div className="label">{card.label}</div>
+          <div className={`value ${card.cls}`}>{card.value}</div>
+          {card.sub && <div className="sub">{card.sub}</div>}
         </div>
       ))}
     </div>
   );
 }
 
-export default MetricCards;
+export default MetricCards;s

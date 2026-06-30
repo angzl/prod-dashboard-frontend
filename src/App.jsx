@@ -52,7 +52,10 @@ function App() {
 
   return (
     <div className="App">
-      <h1>📊 Prod Monitoring Dashboard</h1>
+      <div className="page-header">
+        <h1>📊 Prod Monitoring Dashboard</h1>
+        <span className="badge-date">Обновлено: {new Date().toLocaleDateString('ru-RU')}</span>
+      </div>
 
       <div className="tabs">
         <button
