@@ -43,7 +43,7 @@ function App() {
     <div className="App">
       <h1>📊 Prod Monitoring Dashboard</h1>
 
-      {/* Вкладки */}
+      {/* Три вкладки */}
       <div className="tabs">
         <button
           className={activeTab === 'overview' ? 'tab active' : 'tab'}
@@ -57,9 +57,15 @@ function App() {
         >
           📈 Детализация
         </button>
+        <button
+          className={activeTab === 'compare' ? 'tab active' : 'tab'}
+          onClick={() => setActiveTab('compare')}
+        >
+          📊 Сравнение
+        </button>
       </div>
 
-      {/* Содержимое вкладки "Сводка" – без сравнения */}
+      {/* Вкладка "Сводка" */}
       {activeTab === 'overview' && (
         <div className="tab-content">
           <div className="dashboard-row">
@@ -84,10 +90,9 @@ function App() {
         </div>
       )}
 
-      {/* Содержимое вкладки "Детализация" – с фильтрами, сравнением, историей и графиками */}
+      {/* Вкладка "Детализация" (один проект) */}
       {activeTab === 'detail' && (
         <div className="tab-content">
-          {/* Фильтры */}
           <div className="card filters-card">
             <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div>
@@ -111,7 +116,26 @@ function App() {
             </div>
           </div>
 
-          {/* НОВЫЙ БЛОК: Сравнение проектов */}
+          <div className="card">
+            <div className="card-header">📈 Детальная история</div>
+            <AllProjectsHistoryTable
+              key={selectedPartner}
+              partners={[selectedPartner]}
+              days={days}
+              title={`📊 Детальная история ${selectedPartner}`}
+            />
+          </div>
+
+          <div className="card">
+            <div className="card-header">📊 Графики</div>
+            {selectedPartner && <Graph partner={selectedPartner} days={days} />}
+          </div>
+        </div>
+      )}
+
+      {/* Вкладка "Сравнение" (несколько проектов) */}
+      {activeTab === 'compare' && (
+        <div className="tab-content">
           <div className="card">
             <div className="card-header">📊 Сравнение проектов</div>
             <div style={{ marginBottom: '16px' }}>
@@ -158,23 +182,6 @@ function App() {
               />
             </div>
             <MultiGraph projects={compareProjects.map(p => p.value)} days={days} />
-          </div>
-
-          {/* Детальная история для одного проекта */}
-          <div className="card">
-            <div className="card-header">📈 Детальная история</div>
-            <AllProjectsHistoryTable
-              key={selectedPartner}
-              partners={[selectedPartner]}
-              days={days}
-              title={`📊 Детальная история ${selectedPartner}`}
-            />
-          </div>
-
-          {/* Графики для одного проекта */}
-          <div className="card">
-            <div className="card-header">📊 Графики</div>
-            {selectedPartner && <Graph partner={selectedPartner} days={days} />}
           </div>
         </div>
       )}

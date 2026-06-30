@@ -90,8 +90,8 @@ function MultiGraph({ projects, days = 30 }) {
     hovermode: 'x unified',
     legend: { orientation: 'h', y: -0.25, font: { size: 12 } },
     margin: { l: 60, r: 30, t: 60, b: 100 },
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
+    paper_bgcolor: 'transparent',   // прозрачный, чтобы карточка задавала фон
+    plot_bgcolor: 'transparent',    // прозрачный
     font: { color: '#d0dae8' },
   };
 
