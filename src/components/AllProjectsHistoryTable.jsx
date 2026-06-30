@@ -68,6 +68,24 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
 
   if (sortedDates.length === 0) return <div>Нет данных по датам</div>;
 
+  // ---- Надёжное форматирование чисел и процентов ----
+  const fmt = (num) => {
+    if (num === undefined || num === null || num === '') return '—';
+    // Очищаем от лишних символов, приводим к числу
+    const cleaned = String(num).replace(/[^\d.,\-]/g, '').replace(',', '.');
+    const number = parseFloat(cleaned);
+    if (isNaN(number)) return '—';
+    return number.toLocaleString('ru-RU');
+  };
+
+  const fmtPct = (num) => {
+    if (num === undefined || num === null || num === '') return '—';
+    const cleaned = String(num).replace(/[^\d.,\-]/g, '').replace(',', '.');
+    const number = parseFloat(cleaned);
+    if (isNaN(number)) return '—';
+    return number.toFixed(1) + '%';
+  };
+
   // ---- Метрики ----
   const metrics = [
     { key: 'total_on_platform', label: 'Всего ПУ', noBg: true },
@@ -84,15 +102,6 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
     { key: 'bs_online', label: 'БС онлайн' },
     { key: 'bs_metric_pct', label: '% БС', isPct: true, invert: true },
   ];
-
-  const fmt = (num) => {
-    if (num === undefined || num === null) return '—';
-    return Number(num).toLocaleString('ru-RU');
-  };
-  const fmtPct = (num) => {
-    if (num === undefined || num === null) return '—';
-    return Number(num).toFixed(1) + '%';
-  };
 
   // ---- Для каждого проекта вычисляем средние по каждой метрике ----
   const projectMeans = {};
@@ -162,13 +171,12 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
             <tr>
               <th className="col-project" style={{ minWidth: '100px', textAlign: 'left' }}>Метрика</th>
               {sortedDates.map(date => (
-                <th key={date} className="col-date" style={{ minWidth: '60px' }}>{date.slice(5)}</th>
+                <th key={date} className="col-date" style={{ minWidth: '70px' }}>{date.slice(5)}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {metrics.map((metric, idx) => {
-              const isFirst = idx === 0;
               const noBg = metric.noBg || false;
               const invert = metric.invert || false;
               const mean = means[metric.key] || 0;
@@ -176,7 +184,7 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
 
               return (
                 <tr key={metric.key}>
-                  <td className="col-metric" style={{ fontWeight: isFirst ? 'bold' : 'normal', textAlign: 'left', paddingLeft: isFirst ? '0' : '16px' }}>
+                  <td className="col-metric" style={{ fontWeight: 'normal', textAlign: 'left', paddingLeft: '12px' }}>
                     {metric.label}
                   </td>
                   {sortedDates.map(date => {
@@ -198,7 +206,7 @@ function AllProjectsHistoryTable({ partners, days = 30, title }) {
                       }
                     }
                     return (
-                      <td key={date} style={{ backgroundColor: style.bg, color: style.color }}>
+                      <td key={date} style={{ backgroundColor: style.bg, color: style.color, textAlign: 'right' }}>
                         {display}
                       </td>
                     );

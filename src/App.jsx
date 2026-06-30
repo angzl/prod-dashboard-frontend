@@ -84,11 +84,6 @@ function App() {
             <div className="row-item metrics-wrapper">
               <MetricCards partners={partners} snapshot={snapshot} />
             </div>
-            <div className="row-item bs-chart-wrapper">
-              <div className="card" style={{ padding: '16px', height: '100%' }}>
-                <BSStatusChart partners={partners} />
-              </div>
-            </div>
           </div>
 
           <div className="card">

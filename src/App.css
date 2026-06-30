@@ -322,6 +322,54 @@ body {
   border-bottom: none;
 }
 
+/* ---- ФИКСАЦИЯ КОЛОНОК В ИСТОРИЧЕСКОЙ ТАБЛИЦЕ ---- */
+.hist-wrap .col-project,
+.hist-wrap .col-metric {
+  position: sticky;
+  z-index: 10;
+  background: var(--surface);
+}
+.hist-wrap .col-project {
+  left: 0;
+  min-width: 100px;
+  border-right: 2px solid var(--border);
+}
+.hist-wrap .col-metric {
+  left: 100px;
+  min-width: 110px;
+  border-right: 2px solid var(--border);
+}
+.hist-wrap thead .col-project {
+  z-index: 110;
+  left: 0;
+}
+.hist-wrap thead .col-metric {
+  z-index: 110;
+  left: 100px;
+}
+.hist-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--surface2);
+}
+.hist-wrap tbody tr:nth-child(even) td:not(.col-project):not(.col-metric) {
+  background: rgba(255,255,255,0.02);
+}
+.hist-wrap .last-metric-row td {
+  border-bottom: 3px solid var(--accent2) !important;
+}
+.hist-wrap .project-separator td {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+.hist-wrap .project-separator td.col-project,
+.hist-wrap .project-separator td.col-metric {
+  background: transparent !important;
+  border: none !important;
+}
+
 /* ---- АНИМАЦИИ ---- */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(20px); }
@@ -383,7 +431,7 @@ button:hover {
   }
 }
 
-/* ---- ФИКСАЦИЯ КОЛОНОК В ТАБЛИЦАХ (для старых компонентов) ---- */
+/* ---- ФИКСАЦИЯ КОЛОНОК В СВОДНОЙ ТАБЛИЦЕ (дублируем для надёжности) ---- */
 .table-wrap .col-project,
 .table-wrap .col-metric {
   position: sticky;
@@ -420,13 +468,13 @@ button:hover {
 .table-wrap .last-metric-row td {
   border-bottom: 3px solid var(--accent2) !important;
 }
-.project-separator td {
+.table-wrap .project-separator td {
   padding: 0 !important;
   border: none !important;
   background: transparent !important;
 }
-.project-separator td.col-project,
-.project-separator td.col-metric {
+.table-wrap .project-separator td.col-project,
+.table-wrap .project-separator td.col-metric {
   background: transparent !important;
   border: none !important;
 }
