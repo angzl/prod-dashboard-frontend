@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useDataStore } from '../context/DataContext';
 
 /* ─────────────────────────────────────────────────────────────
    Цветовые стопы (тёмная тема)
@@ -166,37 +167,25 @@ const METRIC_W = 120;
    Компонент
 ───────────────────────────────────────────────────────────── */
 function AllProjectsHistoryTable({ partners, days = 30 }) {
-  const apiBase   = import.meta.env.VITE_API_URL || '';
-  const [allData,  setAllData]  = useState({});
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState(null);
+  const { getHistory, status } = useDataStore();
   const [hoverCol, setHoverCol] = useState(null);
 
-  const winWidth = useWindowWidth();
-  const isMobile = winWidth < 640;
+  const winWidth   = useWindowWidth();
+  const isMobile   = winWidth < 640;
   const metricLeft = isMobile ? 0 : PROJ_W;
 
-  useEffect(() => {
-    if (!partners || partners.length === 0) { setLoading(false); return; }
-    setLoading(true);
-    setError(null);
-    Promise.all(
-      partners.map(p =>
-        fetch(`${apiBase}/api/history?partner=${encodeURIComponent(p)}&days=${days}`)
-          .then(r => { if (!r.ok) throw new Error(`Ошибка для ${p}`); return r.json(); })
-          .then(data => ({ partner: p, data }))
-          .catch(() => ({ partner: p, data: [] }))
-      )
-    ).then(results => {
-      const nd = {};
-      results.forEach(({ partner, data }) => { nd[partner] = data || []; });
-      setAllData(nd);
-      setLoading(false);
-    }).catch(e => { setError(e.message); setLoading(false); });
-  }, [partners, days, apiBase]);
+  // Собираем данные из кеша контекста
+  const allData = Object.fromEntries(
+    (partners || []).map(p => [p, getHistory(p, days) ?? []])
+  );
 
-  if (loading) return <div className="state-msg">⏳ Загрузка истории...</div>;
-  if (error)   return <div className="state-msg error">❌ {error}</div>;
+  const hasAnyData = Object.values(allData).some(arr => arr && arr.length > 0);
+
+  if (!hasAnyData) {
+    if (status === 'loading')
+      return <div className="state-msg">⏳ Загрузка истории...</div>;
+    return <div className="state-msg">Нет исторических данных в кеше</div>;
+  }
 
   /* ── Группировка: последний срез за день ── */
   const projectGrouped = {};

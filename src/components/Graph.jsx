@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
+import { useDataStore } from '../context/DataContext';
 
 // ── Общие настройки Plotly для тёмной темы ──────────────────────────────────
 const PLOTLY_LAYOUT_BASE = {
@@ -77,24 +78,37 @@ function StatsBlock({ stats }) {
 }
 
 function Graph({ partner, days = 30 }) {
-  const apiBase = import.meta.env.VITE_API_URL || '';
-  const [data,    setData]    = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
+  const { getHistory, status } = useDataStore();
 
-  useEffect(() => {
-    if (!partner) return;
-    setLoading(true);
-    setData(null);
-    fetch(`${apiBase}/api/graph_data?partner=${encodeURIComponent(partner)}&days=${days}`)
-      .then(r => { if (!r.ok) throw new Error('Ошибка загрузки данных'); return r.json(); })
-      .then(d => { setData(d); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
-  }, [partner, days, apiBase]);
+  // Берём историю из кеша и трансформируем в формат графика
+  const rawHistory = getHistory(partner, days);
 
-  if (loading) return <div className="state-msg">⏳ Загрузка графиков...</div>;
-  if (error)   return <div className="state-msg error">❌ {error}</div>;
-  if (!data || !data.dates?.length) return <div className="state-msg">Нет данных</div>;
+  const data = React.useMemo(() => {
+    if (!rawHistory || rawHistory.length === 0) return null;
+    // Группируем: последний срез за день
+    const grouped = {};
+    rawHistory.forEach(item => {
+      const day = item.snap_datetime.split(' ')[0];
+      if (!grouped[day] || item.snap_datetime > grouped[day].snap_datetime)
+        grouped[day] = item;
+    });
+    const rows = Object.values(grouped).sort((a, b) =>
+      a.snap_datetime.localeCompare(b.snap_datetime)
+    );
+    return {
+      dates:     rows.map(r => r.snap_datetime.slice(0, 16)),
+      active_pu: rows.map(r => parseFloat(r.active_pu)    || 0),
+      t0:        rows.map(r => parseFloat(r.t0_three_days) || 0),
+      bs_online: rows.map(r => parseFloat(r.bs_online)    || 0),
+      bs_total:  rows.map(r => parseFloat(r.bs_total)     || 0),
+    };
+  }, [rawHistory]);
+
+  if (!data || !data.dates?.length) {
+    return status === 'loading'
+      ? <div className="state-msg">⏳ Загрузка графиков...</div>
+      : <div className="state-msg">Нет данных для отображения</div>;
+  }
 
   // Числовая ось X — непрерывный hover
   const xIdx      = data.dates.map((_, i) => i);

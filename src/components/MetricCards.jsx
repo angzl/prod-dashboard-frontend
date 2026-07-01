@@ -1,5 +1,6 @@
 import React from 'react';
 import { useCountUp } from '../hooks/useCountUp';
+// Данные теперь передаются через props из App (из DataContext)
 
 function MetricCards({ partners, snapshot }) {
   if (!snapshot || snapshot.length === 0) return null;

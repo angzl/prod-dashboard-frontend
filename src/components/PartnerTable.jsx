@@ -1,25 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useDataStore } from '../context/DataContext';
 
-function PartnerTable({ partners }) {
-  const apiBase = import.meta.env.VITE_API_URL || '';
-  const [data,    setData]    = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
+function PartnerTable() {
+  const { snapshot: data, status } = useDataStore();
 
-  useEffect(() => {
-    if (!partners || partners.length === 0) { setLoading(false); return; }
-    setLoading(true);
-    const params = new URLSearchParams();
-    partners.forEach(p => params.append('partners', p));
-    fetch(`${apiBase}/api/snapshot?${params.toString()}`)
-      .then(res => { if (!res.ok) throw new Error('Ошибка загрузки'); return res.json(); })
-      .then(d  => { setData(d); setLoading(false); })
-      .catch(e => { setError(e.message); setLoading(false); });
-  }, [partners, apiBase]);
-
-  if (loading) return <div className="state-msg">⏳ Загрузка таблицы...</div>;
-  if (error)   return <div className="state-msg error">❌ {error}</div>;
-  if (!data || data.length === 0) return <div className="state-msg">Нет данных</div>;
+  if (status === 'loading' && data.length === 0)
+    return <div className="state-msg">⏳ Загрузка таблицы...</div>;
+  if (!data || data.length === 0)
+    return <div className="state-msg">Нет данных</div>;
 
   const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
   const pillCls = (v, good, med) => v >= good ? 'pill-green' : v >= med ? 'pill-yellow' : 'pill-red';
