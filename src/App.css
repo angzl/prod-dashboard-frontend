@@ -325,50 +325,21 @@ body {
 .c-plain  { color: var(--text-muted); }
 
 /* ===== HISTORY TABLE ===== */
+/*
+  Стили таблицы-истории минимальны — большинство задано инлайн в компоненте,
+  чтобы избежать конфликтов с CSS-каскадом при sticky.
+  Здесь только внешний контейнер и margin.
+*/
 .hist-wrap {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  /* overflow-x: auto — включаем горизонтальный скролл */
-  overflow-x: auto;
-  /* overflow-y: visible — чтобы sticky thead работал
-     (родитель не должен иметь overflow отличный от visible/clip) */
-  overflow-y: visible;
-  box-shadow: var(--shadow);
   margin: 0 24px 28px 24px;
-  /* Важно: position: relative нужен для sticky внутри */
-  position: relative;
+  background: var(--surface);
+  /* border/shadow/overflow задаются инлайн в компоненте */
 }
 
-.hist-wrap table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  /* Фиксируем layout — иначе sticky колонки «плывут» */
-  table-layout: auto;
-}
-
-/* Все ячейки tbody */
-.hist-wrap tbody td {
-  padding: 6px 10px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
-  font-weight: 600;
-  border-bottom: 1px solid rgba(46,50,72,0.4);
-}
-.hist-wrap tbody tr:last-child td { border-bottom: none; }
-
-/* Hover строки */
-.hist-wrap tbody tr:hover td:not([style*="sticky"]) {
-  filter: brightness(1.08);
-}
-
-/* Мобильная адаптация */
+/* Мобиль */
 @media (max-width: 639px) {
   .hist-wrap {
     margin: 0 12px 20px 12px;
-    /* На мобиле разрешаем горизонтальный скролл без ограничений */
     -webkit-overflow-scrolling: touch;
   }
 }
