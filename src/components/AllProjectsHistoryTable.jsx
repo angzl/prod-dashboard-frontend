@@ -60,35 +60,51 @@ function getCellStyle(value, rowMin, rowMax, invert = false) {
 ───────────────────────────────────────────────────────────── */
 const METRICS = [
   {
-    key:    'total_on_platform',
-    label:  'Всего ПУ',
-    noBg:   true,
+    key:   'total_on_platform',
+    label: 'Всего ПУ',
+    noBg:  true,
   },
   {
     key:    'active_pu',
     label:  'Активных',
-    pctKey: 'active_pct',
-    pctInvert: false,
+    // процент считаем на фронте: active_pu / total_on_platform * 100
+    pctFn:  (row) => {
+      const total = parseFloat(row['total_on_platform']);
+      const val   = parseFloat(row['active_pu']);
+      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
+    },
   },
   {
-    key:    't0_now',
-    label:  'ТО сегодня',
-    pctKey: 't0_now_pct',
+    key:   't0_now',
+    label: 'ТО сегодня',
+    pctFn: (row) => {
+      const total = parseFloat(row['total_on_platform']);
+      const val   = parseFloat(row['t0_now']);
+      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
+    },
   },
   {
-    key:    't0_prev_day',
-    label:  'ТО вчера',
-    pctKey: 't0_prev_day_pct',
+    key:   't0_prev_day',
+    label: 'ТО вчера',
+    pctFn: (row) => {
+      const total = parseFloat(row['total_on_platform']);
+      const val   = parseFloat(row['t0_prev_day']);
+      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
+    },
   },
   {
-    key:    't0_three_days',
-    label:  'ТО 3 дня',
-    pctKey: 't0_three_days_pct',
+    key:   't0_three_days',
+    label: 'ТО 3 дня',
+    pctFn: (row) => {
+      const total = parseFloat(row['total_on_platform']);
+      const val   = parseFloat(row['t0_three_days']);
+      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
+    },
   },
   {
     key:    'gap_pct',
     label:  'Разрыв →ТО-3',
-    isPct:  true,   // только процент, числа нет
+    isPct:  true,  // поле уже процент, второй строки нет
     invert: true,
   },
   {
@@ -97,9 +113,13 @@ const METRICS = [
     noBg:  true,
   },
   {
-    key:    'bs_online',
-    label:  'БС онлайн',
-    pctKey: 'bs_metric_pct',
+    key:   'bs_online',
+    label: 'БС онлайн',
+    pctFn: (row) => {
+      const total = parseFloat(row['bs_total']);
+      const val   = parseFloat(row['bs_online']);
+      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
+    },
   },
 ];
 
@@ -189,6 +209,8 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
     });
     projectGrouped[partner] = grouped;
   });
+
+
 
   const allDates = Array.from(
     new Set(Object.values(projectGrouped).flatMap(g => Object.keys(g)))
@@ -331,26 +353,36 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
                   );
                 }
 
-                // Значение для градиента
-                const colorKey = isPctOnly ? metric.key : metric.key;
-                const colorVal = parseNum(row[colorKey]);
+                // Значение для градиента — основное числовое поле
+                const colorVal = parseNum(row[metric.key]);
                 const gradStyle = (!isPlain && !isNaN(colorVal))
                   ? getCellStyle(colorVal, range.min, range.max, metric.invert)
                   : null;
 
-                // Числовое значение (основное)
+                // Основное значение
                 const numDisplay = isPctOnly
                   ? fmtPct(row[metric.key])
                   : fmt(row[metric.key]);
 
-                // Процент (второй ряд, если есть pctKey)
-                const pctDisplay = metric.pctKey
-                  ? fmtPct(row[metric.pctKey])
+                // Процент — считаем через pctFn прямо здесь
+                const pctVal     = metric.pctFn ? metric.pctFn(row) : null;
+                const pctDisplay = (pctVal !== null && !isNaN(pctVal))
+                  ? pctVal.toFixed(1) + '%'
                   : null;
 
                 const textColor = gradStyle
                   ? gradStyle.color
                   : isPlain ? 'var(--text-muted)' : 'var(--text)';
+
+                // Цвет % — тот же оттенок что и основной, но чуть прозрачнее
+                const pctColor = gradStyle
+                  ? (() => {
+                      const parts = gradStyle.color.match(/\d+/g);
+                      return parts
+                        ? `rgba(${parts[0]},${parts[1]},${parts[2]},0.72)`
+                        : 'var(--text-muted)';
+                    })()
+                  : 'var(--text-muted)';
 
                 return (
                   <td
@@ -378,17 +410,14 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
                       {numDisplay}
                     </div>
 
-                    {/* % под числом — мелко и приглушённо */}
+                    {/* % под числом */}
                     {pctDisplay && (
                       <div style={{
-                        fontSize:    10,
-                        fontWeight:  500,
-                        // чуть светлее основного цвета — не конкурирует с числом
-                        color:       gradStyle
-                          ? `rgba(${gradStyle.color.match(/\d+/g).join(',')},0.75)`
-                          : 'var(--text-muted)',
-                        lineHeight:  1.2,
-                        marginTop:   1,
+                        fontSize:   10,
+                        fontWeight: 500,
+                        color:      pctColor,
+                        lineHeight: 1.2,
+                        marginTop:  1,
                       }}>
                         {pctDisplay}
                       </div>
