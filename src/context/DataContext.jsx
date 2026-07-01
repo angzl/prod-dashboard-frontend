@@ -1,68 +1,65 @@
 /**
- * DataContext — глобальный стор данных с:
- *  - polling (автообновление по интервалу)
- *  - localStorage кеш (переживает обновление страницы и падение API)
- *  - статус API (online / offline / updating)
- *  - история запросов (время последнего успешного обновления)
+ * DataContext — фронтовый стор.
+ *
+ * Стратегия:
+ *   1. При старте читаем данные из localStorage (мгновенно показываем)
+ *   2. Делаем ОДИН fetch с API чтобы синхронизировать свежие данные
+ *   3. Далее опрашиваем только /api/cache/status (лёгкий эндпоинт)
+ *      — если last_ok изменился → делаем полный fetch
+ *   4. Никакого тяжёлого polling с фронта — вся нагрузка на бэкенд
  */
-import React, { createContext, useContext, useEffect, useRef, useCallback, useReducer } from 'react';
+import React, {
+  createContext, useContext, useEffect,
+  useRef, useCallback, useReducer,
+} from 'react';
 
-/* ── Ключи localStorage ───────────────────────────────────── */
+/* ── localStorage ──────────────────────────────────────────── */
 const LS = {
   PARTNERS:  'dm_partners',
   SNAPSHOT:  'dm_snapshot',
-  HISTORY:   'dm_history',   // { [partner]: { [days]: data } }
+  HISTORY:   'dm_history',
   SETTINGS:  'dm_settings',
-  LAST_OK:   'dm_last_ok',   // ISO timestamp последнего успешного fetch
+  LAST_OK:   'dm_last_ok',
 };
 
-/* ── Настройки по умолчанию ───────────────────────────────── */
 const DEFAULT_SETTINGS = {
-  intervalMs:      60_000,   // 1 минута
+  pollStatusMs:    15_000,   // как часто фронт проверяет /api/cache/status
   historyDays:     30,
-  apiTimeoutMs:    10_000,   // считаем API упавшим если нет ответа 10с
-  offlineThreshMs: 120_000,  // показываем "API недоступен" если нет ответа 2 мин
+  offlineThreshMs: 300_000,  // 5 мин без ответа → показываем баннер
 };
 
-/* ── Утилиты localStorage ─────────────────────────────────── */
 function lsGet(key, fallback = null) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch { return fallback; }
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; }
+  catch { return fallback; }
 }
 function lsSet(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
-/* ── Reducer ──────────────────────────────────────────────── */
+/* ── Reducer ───────────────────────────────────────────────── */
 const initialState = {
-  partners:   lsGet(LS.PARTNERS,  []),
-  snapshot:   lsGet(LS.SNAPSHOT,  []),
-  history:    lsGet(LS.HISTORY,   {}),
-  settings:   { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
-  lastOk:     lsGet(LS.LAST_OK,   null),  // ISO string
-  status:     'idle',   // idle | loading | ok | error
-  errorMsg:   null,
+  partners:  lsGet(LS.PARTNERS, []),
+  snapshot:  lsGet(LS.SNAPSHOT, []),
+  history:   lsGet(LS.HISTORY,  {}),
+  settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
+  lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего успешного fetch
+  serverLastOk: null,                   // last_ok с сервера (unix timestamp)
+  status:    'idle',   // idle | loading | ok | error
+  errorMsg:  null,
 };
 
 function reducer(state, action) {
   switch (action.type) {
-
     case 'SET_STATUS':
       return { ...state, status: action.payload, errorMsg: action.error ?? null };
 
     case 'FETCH_OK': {
-      const { partners, snapshot, historyKey, historyData } = action.payload;
-      const lastOk = new Date().toISOString();
-
-      // Обновляем историю точечно: { partner_days: data }
+      const { partners, snapshot, historyKey, historyData, serverLastOk } = action.payload;
+      const lastOk  = new Date().toISOString();
       const history = { ...state.history };
-      if (historyKey && historyData !== undefined) {
+      if (historyKey && historyData !== undefined)
         history[historyKey] = historyData;
-      }
 
-      // Сохраняем в localStorage
       if (partners !== undefined) lsSet(LS.PARTNERS, partners);
       if (snapshot  !== undefined) lsSet(LS.SNAPSHOT,  snapshot);
       if (historyKey) lsSet(LS.HISTORY, history);
@@ -70,14 +67,18 @@ function reducer(state, action) {
 
       return {
         ...state,
-        partners:  partners  ?? state.partners,
-        snapshot:  snapshot  ?? state.snapshot,
+        partners:     partners     ?? state.partners,
+        snapshot:     snapshot     ?? state.snapshot,
         history,
         lastOk,
-        status:    'ok',
-        errorMsg:  null,
+        serverLastOk: serverLastOk ?? state.serverLastOk,
+        status:       'ok',
+        errorMsg:     null,
       };
     }
+
+    case 'SET_SERVER_LAST_OK':
+      return { ...state, serverLastOk: action.payload };
 
     case 'FETCH_ERROR':
       return { ...state, status: 'error', errorMsg: action.payload };
@@ -92,108 +93,144 @@ function reducer(state, action) {
       [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.LAST_OK].forEach(k => {
         try { localStorage.removeItem(k); } catch {}
       });
-      return {
-        ...state,
-        partners: [], snapshot: [], history: {},
-        lastOk: null, status: 'idle', errorMsg: null,
-      };
+      return { ...state, partners: [], snapshot: [], history: {}, lastOk: null, serverLastOk: null };
     }
 
     default: return state;
   }
 }
 
-/* ── Context ──────────────────────────────────────────────── */
+/* ── Context ───────────────────────────────────────────────── */
 const DataContext = createContext(null);
 
 export function DataProvider({ children }) {
-  const apiBase = import.meta.env.VITE_API_URL || '';
+  const apiBase   = import.meta.env.VITE_API_URL || '';
   const [state, dispatch] = useReducer(reducer, initialState);
-  const timerRef    = useRef(null);
-  const fetchingRef = useRef(false);
+  const statusTimerRef    = useRef(null);
+  const fetchingRef       = useRef(false);
+  // Запоминаем last_ok с сервера который уже загружен
+  const loadedServerTs    = useRef(null);
 
-  /* ── Основной fetch цикл ───────────────────────────────── */
+  /* ── Полный fetch данных с сервера ─────────────────────── */
   const fetchAll = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     dispatch({ type: 'SET_STATUS', payload: 'loading' });
 
-    const { apiTimeoutMs, historyDays } = state.settings;
-
     try {
-      const ctrl = new AbortController();
-      const to   = setTimeout(() => ctrl.abort(), apiTimeoutMs);
-
-      // 1. Список проектов
-      const pRes  = await fetch(`${apiBase}/api/partners`, { signal: ctrl.signal });
-      if (!pRes.ok) throw new Error(`partners: ${pRes.status}`);
+      // 1. Партнёры
+      const pRes = await fetch(`${apiBase}/api/partners`);
+      if (!pRes.ok) throw new Error(`partners ${pRes.status}`);
       const partners = await pRes.json();
 
-      // 2. Снепшот всех проектов
+      // 2. Снепшот
       const params = new URLSearchParams();
       partners.forEach(p => params.append('partners', p));
-      const sRes = await fetch(`${apiBase}/api/snapshot?${params}`, { signal: ctrl.signal });
-      if (!sRes.ok) throw new Error(`snapshot: ${sRes.status}`);
+      const sRes = await fetch(`${apiBase}/api/snapshot?${params}`);
+      if (!sRes.ok) throw new Error(`snapshot ${sRes.status}`);
       const snapshot = await sRes.json();
-
-      clearTimeout(to);
 
       dispatch({ type: 'FETCH_OK', payload: { partners, snapshot } });
 
-      // 3. История по каждому проекту (параллельно, НЕ блокируем основной статус)
-      partners.forEach(async (partner) => {
-        const key = `${partner}_${historyDays}`;
+      // 3. История — параллельно, не блокируем
+      const { historyDays } = state.settings;
+      partners.forEach(async partner => {
         try {
           const hRes = await fetch(
             `${apiBase}/api/history?partner=${encodeURIComponent(partner)}&days=${historyDays}`
           );
           if (!hRes.ok) return;
           const historyData = await hRes.json();
-          dispatch({ type: 'FETCH_OK', payload: { historyKey: key, historyData } });
+          dispatch({
+            type: 'FETCH_OK',
+            payload: { historyKey: `${partner}_${historyDays}`, historyData },
+          });
         } catch {}
       });
 
     } catch (err) {
-      if (err.name === 'AbortError') {
-        dispatch({ type: 'FETCH_ERROR', payload: 'Таймаут запроса к API' });
-      } else {
-        dispatch({ type: 'FETCH_ERROR', payload: err.message });
-      }
+      dispatch({ type: 'FETCH_ERROR', payload: err.message });
     } finally {
       fetchingRef.current = false;
     }
-  }, [apiBase, state.settings.apiTimeoutMs, state.settings.historyDays]);
+  }, [apiBase, state.settings.historyDays]);
 
-  /* ── Запуск polling ────────────────────────────────────── */
-  const startPolling = useCallback(() => {
-    stopPolling();
-    fetchAll(); // сразу
-    timerRef.current = setInterval(fetchAll, state.settings.intervalMs);
-  }, [fetchAll, state.settings.intervalMs]);
+  /* ── Лёгкий опрос статуса кеша ─────────────────────────── */
+  const pollStatus = useCallback(async () => {
+    try {
+      const res  = await fetch(`${apiBase}/api/cache/status`);
+      if (!res.ok) return;
+      const data = await res.json();
 
-  function stopPolling() {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
+      const serverTs = data.last_ok;  // unix float или null
+
+      // Если сервер обновил данные с момента нашего последнего fetch → тянем
+      if (serverTs && serverTs !== loadedServerTs.current) {
+        loadedServerTs.current = serverTs;
+        await fetchAll();
+      } else {
+        // Просто сохраняем серверный ts для индикации
+        dispatch({ type: 'SET_SERVER_LAST_OK', payload: serverTs });
+      }
+    } catch {
+      // Сеть упала — не меняем статус, данные из localStorage остаются
     }
-  }
+  }, [apiBase, fetchAll]);
 
-  // При монтировании и при смене настроек — перезапускаем polling
+  /* ── Запуск: сначала fetchAll, потом polling статуса ────── */
   useEffect(() => {
-    startPolling();
-    return stopPolling;
-  }, [state.settings.intervalMs, state.settings.historyDays]);
+    // Первичный fetch при монтировании
+    fetchAll();
 
-  /* ── Публичные методы ──────────────────────────────────── */
-  const updateSettings = (patch) => dispatch({ type: 'UPDATE_SETTINGS', payload: patch });
-  const clearCache     = ()      => dispatch({ type: 'CLEAR_CACHE' });
-  const refreshNow     = ()      => { stopPolling(); startPolling(); };
+    // Polling статуса — лёгкий
+    statusTimerRef.current = setInterval(pollStatus, state.settings.pollStatusMs);
+    return () => clearInterval(statusTimerRef.current);
+  }, []); // только при монтировании
 
-  // Хелпер: получить историю из кеша
+  // Перезапускаем polling статуса при смене интервала
+  useEffect(() => {
+    clearInterval(statusTimerRef.current);
+    statusTimerRef.current = setInterval(pollStatus, state.settings.pollStatusMs);
+    return () => clearInterval(statusTimerRef.current);
+  }, [state.settings.pollStatusMs, pollStatus]);
+
+  /* ── Публичные методы ───────────────────────────────────── */
+  const updateSettings = useCallback(async (patch) => {
+    dispatch({ type: 'UPDATE_SETTINGS', payload: patch });
+
+    // Отправляем на бэкенд
+    const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
+    const params = new URLSearchParams({ pin, ...patch });
+    try {
+      await fetch(`${apiBase}/api/admin/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params,
+      });
+    } catch {}
+  }, [apiBase]);
+
+  const clearCache = useCallback(async () => {
+    dispatch({ type: 'CLEAR_CACHE' });
+    const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
+    try {
+      await fetch(`${apiBase}/api/admin/clear?pin=${pin}`, { method: 'POST' });
+    } catch {}
+  }, [apiBase]);
+
+  const refreshNow = useCallback(async () => {
+    // Просим сервер обновить кеш
+    const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
+    try {
+      await fetch(`${apiBase}/api/admin/refresh?pin=${pin}`, { method: 'POST' });
+    } catch {}
+    // И тянем свежие данные
+    await fetchAll();
+  }, [apiBase, fetchAll]);
+
   const getHistory = (partner, days) =>
     state.history[`${partner}_${days}`] ?? null;
 
-  // Статус API: если последний успешный fetch был давно — считаем offline
   const isApiOffline = (() => {
     if (state.status === 'ok') return false;
     if (!state.lastOk)         return state.status === 'error';

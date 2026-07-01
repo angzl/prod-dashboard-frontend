@@ -3,6 +3,7 @@ import { useDataStore } from '../context/DataContext';
 
 /* ── PIN-защита ───────────────────────────────────────────── */
 const PIN_KEY     = 'dm_admin_auth';
+const PIN_STORE   = 'dm_admin_auth_pin';   // храним сам PIN для запросов к API
 const ADMIN_PIN   = import.meta.env.VITE_ADMIN_PIN || '1234';
 
 function PinGate({ onUnlock }) {
@@ -19,7 +20,8 @@ function PinGate({ onUnlock }) {
     setPin(next);
     if (next.length === 4) {
       if (next === ADMIN_PIN) {
-        sessionStorage.setItem(PIN_KEY, '1');
+        sessionStorage.setItem(PIN_KEY,   '1');
+        sessionStorage.setItem(PIN_STORE, next);  // сохраняем для API запросов
         onUnlock();
       } else {
         setErr(true);
@@ -104,15 +106,26 @@ function SettingRow({ label, sub, children }) {
 }
 
 /* ── Выбор интервала ──────────────────────────────────────── */
-const INTERVALS = [
+// Интервал обновления на СЕРВЕРЕ (как часто бэкенд ходит в БД)
+const SERVER_INTERVALS = [
   { label: '30 сек',  ms: 30_000 },
   { label: '1 мин',   ms: 60_000 },
   { label: '2 мин',   ms: 120_000 },
   { label: '5 мин',   ms: 300_000 },
   { label: '10 мин',  ms: 600_000 },
   { label: '30 мин',  ms: 1_800_000 },
-  { label: 'Выкл.',   ms: 0 },
 ];
+
+// Как часто ФРОНТ проверяет /api/cache/status (лёгкий запрос)
+const POLL_INTERVALS = [
+  { label: '5 сек',   ms: 5_000 },
+  { label: '15 сек',  ms: 15_000 },
+  { label: '30 сек',  ms: 30_000 },
+  { label: '1 мин',   ms: 60_000 },
+];
+
+// Для обратной совместимости
+const INTERVALS = SERVER_INTERVALS;
 
 const DAYS_OPTIONS = [7, 14, 30, 60, 90, 180, 365];
 const TIMEOUT_OPTIONS = [5_000, 10_000, 15_000, 30_000];
@@ -241,17 +254,32 @@ function AdminPanelContent() {
       {/* Секция: Автообновление */}
       <div style={{ marginBottom: 28 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 4 }}>
-          Автообновление
+          Серверное обновление
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+          Бэкенд опрашивает БД по расписанию. Все пользователи читают из серверного кеша —
+          сколько бы вкладок ни было открыто, к БД идёт ровно один запрос.
         </div>
 
         <SettingRow
-          label="Интервал обновления"
-          sub="Как часто опрашивать API для всех вкладок"
+          label="Интервал обновления на сервере"
+          sub="Как часто бэкенд ходит в БД и обновляет кеш"
         >
           <SegmentControl
             value={settings.intervalMs}
-            options={INTERVALS}
-            onChange={(ms) => save({ intervalMs: ms })}
+            options={SERVER_INTERVALS}
+            onChange={(ms) => save({ intervalMs: ms, interval_seconds: Math.round(ms / 1000) })}
+          />
+        </SettingRow>
+
+        <SettingRow
+          label="Проверка обновлений (фронт)"
+          sub="Как часто браузер проверяет /api/cache/status — лёгкий запрос"
+        >
+          <SegmentControl
+            value={settings.pollStatusMs}
+            options={POLL_INTERVALS}
+            onChange={(ms) => save({ pollStatusMs: ms })}
           />
         </SettingRow>
 
@@ -262,26 +290,15 @@ function AdminPanelContent() {
           <SegmentControl
             value={settings.historyDays}
             options={DAYS_OPTIONS}
-            onChange={(d) => save({ historyDays: d })}
+            onChange={(d) => save({ historyDays: d, history_days: d })}
             valueKey={undefined}
             labelKey={undefined}
           />
         </SettingRow>
 
         <SettingRow
-          label="Таймаут запроса"
-          sub="Через сколько секунд считать запрос зависшим"
-        >
-          <SegmentControl
-            value={settings.apiTimeoutMs}
-            options={TIMEOUT_OPTIONS.map(ms => ({ ms, label: `${ms/1000}с` }))}
-            onChange={(ms) => save({ apiTimeoutMs: ms })}
-          />
-        </SettingRow>
-
-        <SettingRow
-          label="Порог недоступности API"
-          sub="Через какое время без ответа показывать баннер 'API недоступен'"
+          label="Порог баннера 'API недоступен'"
+          sub="Через какое время без ответа показывать предупреждение"
         >
           <SegmentControl
             value={settings.offlineThreshMs}
