@@ -52,22 +52,55 @@ function getCellStyle(value, rowMin, rowMax, invert = false) {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Метрики
+   Метрики — ОБЪЕДИНЁННЫЕ (число + % в одной строке)
+   
+   Вместо отдельных строк для числа и процента —
+   одна строка с числом и % под ним в одной ячейке.
+   pctKey: ключ поля с процентом для этой строки.
 ───────────────────────────────────────────────────────────── */
 const METRICS = [
-  { key: 'total_on_platform', label: 'Всего ПУ',      noBg: true               },
-  { key: 'active_pu',         label: 'Активных'                                 },
-  { key: 'active_pct',        label: '% активных',    isPct: true               },
-  { key: 't0_now',            label: 'ТО сегодня'                               },
-  { key: 't0_now_pct',        label: '% ТО сег.',     isPct: true               },
-  { key: 't0_prev_day',       label: 'ТО вчера'                                 },
-  { key: 't0_prev_day_pct',   label: '% ТО вч.',      isPct: true               },
-  { key: 't0_three_days',     label: 'ТО 3 дня'                                 },
-  { key: 't0_three_days_pct', label: '% ТО 3д.',      isPct: true               },
-  { key: 'gap_pct',           label: 'Разрыв →ТО-3',  isPct: true, invert: true },
-  { key: 'bs_total',          label: 'БС всего',       noBg: true               },
-  { key: 'bs_online',         label: 'БС онлайн'                                },
-  { key: 'bs_metric_pct',     label: '% БС',           isPct: true              },
+  {
+    key:    'total_on_platform',
+    label:  'Всего ПУ',
+    noBg:   true,
+  },
+  {
+    key:    'active_pu',
+    label:  'Активных',
+    pctKey: 'active_pct',
+    pctInvert: false,
+  },
+  {
+    key:    't0_now',
+    label:  'ТО сегодня',
+    pctKey: 't0_now_pct',
+  },
+  {
+    key:    't0_prev_day',
+    label:  'ТО вчера',
+    pctKey: 't0_prev_day_pct',
+  },
+  {
+    key:    't0_three_days',
+    label:  'ТО 3 дня',
+    pctKey: 't0_three_days_pct',
+  },
+  {
+    key:    'gap_pct',
+    label:  'Разрыв →ТО-3',
+    isPct:  true,   // только процент, числа нет
+    invert: true,
+  },
+  {
+    key:   'bs_total',
+    label: 'БС всего',
+    noBg:  true,
+  },
+  {
+    key:    'bs_online',
+    label:  'БС онлайн',
+    pctKey: 'bs_metric_pct',
+  },
 ];
 
 /* ─────────────────────────────────────────────────────────────
@@ -82,6 +115,10 @@ function fmtPct(num) {
   if (num == null || num === '') return '—';
   const n = parseFloat(String(num).replace(',', '.'));
   return isNaN(n) ? '—' : n.toFixed(1) + '%';
+}
+function parseNum(raw) {
+  if (raw == null || raw === '') return NaN;
+  return parseFloat(String(raw).replace(',', '.'));
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -100,46 +137,35 @@ function useWindowWidth() {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   Константы sticky
+   Sticky-константы
 ───────────────────────────────────────────────────────────── */
-const PROJ_W   = 34;   // ширина вертикальной полосы проекта
-const METRIC_W = 128;  // ширина колонки «Метрика»
-const HEADER_H = 33;   // высота thead (для sticky позиционирования)
-
-/*
-  КЛЮЧЕВОЕ РЕШЕНИЕ просветов:
-  Вместо border используем box-shadow — он не участвует в box-model
-  и не создаёт «зазоры» при прокрутке.
-
-  Sticky-ячейка проекта:   box-shadow: 1px 0 0 var(--border) (правый край)
-  Sticky-ячейка метрики:   box-shadow: 2px 0 4px rgba(0,0,0,0.3) (тень-разделитель)
-  Фон sticky-ячеек должен точно совпадать с фоном строки — поэтому
-  передаём его явно как пропс, а не через CSS-класс.
-*/
+const PROJ_W   = 34;
+const METRIC_W = 120;
 
 /* ─────────────────────────────────────────────────────────────
    Компонент
 ───────────────────────────────────────────────────────────── */
 function AllProjectsHistoryTable({ partners, days = 30 }) {
-  const apiBase    = import.meta.env.VITE_API_URL || '';
-  const [allData,   setAllData]   = useState({});
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null);
-  const [hoverCol,  setHoverCol]  = useState(null);
-  const winWidth   = useWindowWidth();
-  const isMobile   = winWidth < 640;
+  const apiBase   = import.meta.env.VITE_API_URL || '';
+  const [allData,  setAllData]  = useState({});
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);
+  const [hoverCol, setHoverCol] = useState(null);
+
+  const winWidth = useWindowWidth();
+  const isMobile = winWidth < 640;
+  const metricLeft = isMobile ? 0 : PROJ_W;
 
   useEffect(() => {
     if (!partners || partners.length === 0) { setLoading(false); return; }
     setLoading(true);
     setError(null);
-
     Promise.all(
       partners.map(p =>
         fetch(`${apiBase}/api/history?partner=${encodeURIComponent(p)}&days=${days}`)
           .then(r => { if (!r.ok) throw new Error(`Ошибка для ${p}`); return r.json(); })
           .then(data => ({ partner: p, data }))
-          .catch(err => ({ partner: p, data: [] }))
+          .catch(() => ({ partner: p, data: [] }))
       )
     ).then(results => {
       const nd = {};
@@ -181,11 +207,14 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
     const grouped = projectGrouped[partner];
     METRICS.forEach(m => {
       if (m.noBg) return;
+      // Градиент считаем по основному числовому ключу
+      // (для isPct-строк — по самому полю, для остальных — по числу)
+      const colorKey = m.isPct ? m.key : (m.key);
       const vals = allDates
         .map(d => {
           const row = grouped[d];
           if (!row) return NaN;
-          return parseFloat(String(row[m.key]).replace(',', '.'));
+          return parseNum(row[colorKey]);
         })
         .filter(v => !isNaN(v));
       rowRanges[partner][m.key] = {
@@ -195,60 +224,62 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
     });
   });
 
-  /* ── Смещение sticky-колонок ── */
-  const projLeft   = 0;
-  const metricLeft = isMobile ? 0 : PROJ_W;
-  // Суммарная ширина frozen-зоны (для padding первой data-ячейки не нужен,
-  // браузер сам считает)
+  /* ── Стили sticky ── */
+  const stickyProj = {
+    position:      'sticky',
+    left:          0,
+    zIndex:        12,
+    width:         PROJ_W,
+    minWidth:      PROJ_W,
+    maxWidth:      PROJ_W,
+    background:    'var(--surface2)',
+    boxShadow:     'inset -1px 0 0 var(--border)',
+    padding:       0,
+    verticalAlign: 'middle',
+    textAlign:     'center',
+  };
 
-  /* ── Общие стили для sticky th/td ── */
-  const stickyBase = {
-    position: 'sticky',
-    zIndex:   10,
+  const stickyMetric = {
+    position:    'sticky',
+    left:        metricLeft,
+    zIndex:      11,
+    width:       METRIC_W,
+    minWidth:    METRIC_W,
+    maxWidth:    METRIC_W,
+    background:  'var(--surface2)',
+    // тень вместо border — нет просветов при прокрутке
+    boxShadow:   '3px 0 8px rgba(0,0,0,0.4), inset -1px 0 0 var(--border)',
+    textAlign:   'left',
+    paddingLeft: 10,
+    paddingRight: 6,
+    color:       'var(--text-muted)',
+    fontSize:    11,
+    fontWeight:  400,
+    whiteSpace:  'nowrap',
   };
 
   /* ── Рендер одного проекта ── */
   const renderProject = (partner, projIdx) => {
-    const grouped   = projectGrouped[partner];
-    const ranges    = rowRanges[partner];
-    const rowCount  = METRICS.length;
-
-    // Чередование фона строк внутри группы
-    const rowBgEven = 'var(--surface)';
-    const rowBgOdd  = 'rgba(255,255,255,0.018)';
+    const grouped  = projectGrouped[partner];
+    const ranges   = rowRanges[partner];
+    const rowCount = METRICS.length;
 
     return (
       <React.Fragment key={partner}>
         {METRICS.map((metric, mIdx) => {
-          const isPlain = !!metric.noBg;
-          const range   = ranges[metric.key] || { min: 0, max: 0 };
-          const rowBg   = mIdx % 2 === 0 ? rowBgEven : rowBgOdd;
+          const isPlain  = !!metric.noBg;
+          const isPctOnly = !!metric.isPct; // строка только с %, без числа выше
+          const range    = ranges[metric.key] || { min: 0, max: 0 };
+
+          // Чередование фона
+          const rowBg = mIdx % 2 === 0 ? 'var(--surface)' : 'rgba(255,255,255,0.02)';
 
           return (
-            <tr key={`${partner}-${metric.key}`}>
+            <tr key={`${partner}-${metric.key}`} style={{ background: rowBg }}>
 
-              {/* ── Вертикальная полоса «Проект» (только десктоп, только 1-я строка) ── */}
+              {/* Вертикальная полоса проекта — десктоп, только 1-я строка */}
               {!isMobile && mIdx === 0 && (
-                <td
-                  rowSpan={rowCount}
-                  style={{
-                    ...stickyBase,
-                    left:          projLeft,
-                    zIndex:        12,
-                    width:         PROJ_W,
-                    minWidth:      PROJ_W,
-                    maxWidth:      PROJ_W,
-                    padding:       0,
-                    verticalAlign: 'middle',
-                    textAlign:     'center',
-                    /*
-                      Фон: var(--surface2) — фиксированный, не чередуется.
-                      box-shadow вместо border — нет просвета при прокрутке.
-                    */
-                    background:    'var(--surface2)',
-                    boxShadow:     'inset -1px 0 0 var(--border)',
-                  }}
-                >
+                <td rowSpan={rowCount} style={stickyProj}>
                   <span style={{
                     display:       'block',
                     writingMode:   'vertical-rl',
@@ -266,46 +297,14 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
                 </td>
               )}
 
-              {/* ── Ячейка «Метрика» — sticky всегда ── */}
-              <td
-                style={{
-                  ...stickyBase,
-                  left:        metricLeft,
-                  zIndex:      11,
-                  width:       METRIC_W,
-                  minWidth:    METRIC_W,
-                  maxWidth:    METRIC_W,
-                  /*
-                    Фон должен точно совпадать с фоном строки,
-                    иначе под ним будут просвечивать данные.
-                    Но т.к. метрика — всегда surface2, используем его.
-                  */
-                  background:  'var(--surface2)',
-                  /*
-                    box-shadow вправо — имитирует правый border без зазоров.
-                    Дополнительная тень добавляет глубину при прокрутке.
-                  */
-                  boxShadow:   '2px 0 6px rgba(0,0,0,0.35), inset -1px 0 0 var(--border)',
-                  textAlign:   'left',
-                  paddingLeft: 10,
-                  paddingRight: 8,
-                  color:       isPlain ? 'var(--text)' : 'var(--text-muted)',
-                  fontSize:    11,
-                  fontWeight:  isPlain ? 600 : 400,
-                  whiteSpace:  'nowrap',
-                  fontStyle:   metric.isPct ? 'italic' : 'normal',
-                }}
-              >
-                {/* На мобиле: имя проекта над первой метрикой */}
+              {/* Колонка «Метрика» — sticky */}
+              <td style={stickyMetric}>
+                {/* Имя проекта на мобиле перед первой метрикой */}
                 {isMobile && mIdx === 0 && multiProject && (
                   <span style={{
-                    display:       'block',
-                    color:         '#a5b4fc',
-                    fontWeight:    700,
-                    fontStyle:     'normal',
-                    fontSize:      10,
-                    marginBottom:  2,
-                    letterSpacing: '0.3px',
+                    display: 'block', color: '#a5b4fc',
+                    fontWeight: 700, fontStyle: 'normal',
+                    fontSize: 10, marginBottom: 2,
                   }}>
                     {partner}
                   </span>
@@ -313,58 +312,87 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
                 {metric.label}
               </td>
 
-              {/* ── Данные ── */}
+              {/* Данные */}
               {allDates.map((date, colIdx) => {
                 const row = grouped[date];
-                let display   = '—';
-                let cellSt    = {};
-                let isColored = false;
+                const isHovered = hoverCol === colIdx;
 
-                if (row) {
-                  const raw = row[metric.key];
-                  display   = metric.isPct ? fmtPct(raw) : fmt(raw);
-
-                  if (!isPlain) {
-                    const val = parseFloat(String(raw).replace(',', '.'));
-                    const s   = getCellStyle(val, range.min, range.max, metric.invert);
-                    if (s) { cellSt = s; isColored = true; }
-                  }
+                if (!row) {
+                  return (
+                    <td key={date} style={{
+                      padding: '5px 8px', minWidth: 70, textAlign: 'right',
+                      color: 'var(--text-muted)', fontSize: 11,
+                      outline: isHovered ? '1px solid rgba(165,180,252,0.4)' : undefined,
+                      outlineOffset: '-1px',
+                    }}
+                      onMouseEnter={() => setHoverCol(colIdx)}
+                      onMouseLeave={() => setHoverCol(null)}
+                    >—</td>
+                  );
                 }
 
-                const isHovered = hoverCol === colIdx;
+                // Значение для градиента
+                const colorKey = isPctOnly ? metric.key : metric.key;
+                const colorVal = parseNum(row[colorKey]);
+                const gradStyle = (!isPlain && !isNaN(colorVal))
+                  ? getCellStyle(colorVal, range.min, range.max, metric.invert)
+                  : null;
+
+                // Числовое значение (основное)
+                const numDisplay = isPctOnly
+                  ? fmtPct(row[metric.key])
+                  : fmt(row[metric.key]);
+
+                // Процент (второй ряд, если есть pctKey)
+                const pctDisplay = metric.pctKey
+                  ? fmtPct(row[metric.pctKey])
+                  : null;
+
+                const textColor = gradStyle
+                  ? gradStyle.color
+                  : isPlain ? 'var(--text-muted)' : 'var(--text)';
 
                 return (
                   <td
                     key={date}
                     style={{
-                      ...cellSt,
-                      padding:    '5px 8px',
-                      minWidth:   62,
+                      padding:    '4px 8px',
+                      minWidth:   70,
                       textAlign:  'right',
-                      fontSize:   metric.isPct ? 11 : 12,
-                      fontWeight: 600,
                       fontVariantNumeric: 'tabular-nums',
-                      /*
-                        Hover по колонке: outline вместо border —
-                        не сдвигает соседние ячейки
-                      */
-                      outline: isHovered
-                        ? '1px solid rgba(165,180,252,0.4)'
-                        : undefined,
+                      verticalAlign: 'middle',
+                      backgroundColor: gradStyle ? gradStyle.backgroundColor : undefined,
+                      outline:    isHovered ? '1px solid rgba(165,180,252,0.4)' : undefined,
                       outlineOffset: '-1px',
-                      /*
-                        Для некрашеных строк — лёгкий фон строки
-                      */
-                      background: isColored ? cellSt.backgroundColor : (
-                        isHovered
-                          ? 'rgba(165,180,252,0.06)'
-                          : !isPlain ? rowBg : 'transparent'
-                      ),
                     }}
                     onMouseEnter={() => setHoverCol(colIdx)}
                     onMouseLeave={() => setHoverCol(null)}
                   >
-                    {display}
+                    {/* Основное число */}
+                    <div style={{
+                      fontSize:   isPlain ? 11 : 12,
+                      fontWeight: isPlain ? 400 : 700,
+                      color:      textColor,
+                      lineHeight: pctDisplay ? 1.2 : 1.4,
+                    }}>
+                      {numDisplay}
+                    </div>
+
+                    {/* % под числом — мелко и приглушённо */}
+                    {pctDisplay && (
+                      <div style={{
+                        fontSize:    10,
+                        fontWeight:  500,
+                        // чуть светлее основного цвета — не конкурирует с числом
+                        color:       gradStyle
+                          ? `rgba(${gradStyle.color.match(/\d+/g).join(',')},0.75)`
+                          : 'var(--text-muted)',
+                        lineHeight:  1.2,
+                        marginTop:   1,
+                      }}>
+                        {pctDisplay}
+                      </div>
+                    )}
                   </td>
                 );
               })}
@@ -372,16 +400,15 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
           );
         })}
 
-        {/* ── Разделитель между проектами ── */}
+        {/* Разделитель между проектами */}
         {multiProject && projIdx < projectList.length - 1 && (
           <tr>
             <td
               colSpan={allDates.length + (isMobile ? 1 : 2)}
               style={{
-                height:     8,
-                padding:    0,
+                height: 6, padding: 0,
                 background: 'var(--bg)',
-                borderTop:  '1px solid var(--border)',
+                borderTop: '1px solid var(--border)',
                 borderBottom: '1px solid var(--border)',
               }}
             />
@@ -391,7 +418,7 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
     );
   };
 
-  /* ── Стили для заголовков thead ── */
+  /* ── Стили заголовков thead ── */
   const thBase = {
     position:      'sticky',
     top:           0,
@@ -403,37 +430,21 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
     padding:       '8px 8px',
     fontWeight:    600,
     whiteSpace:    'nowrap',
-    /*
-      Нижний border thead — через box-shadow, иначе при sticky-scroll
-      граница «улетает» вместе с контентом
-    */
     boxShadow:     'inset 0 -1px 0 var(--border)',
   };
 
   return (
-    /*
-      СТРУКТУРА:
-      .hist-wrap — внешний контейнер с border/radius/shadow
-        → overflow-x: auto  (горизонтальный скролл)
-        → overflow-y: visible (иначе sticky thead не работает)
-
-      Внутри — обычная таблица, sticky работает относительно
-      ближайшего scroll-контейнера (hist-wrap).
-
-      ВАЖНО: чтобы sticky thead работал в overflow-x:auto,
-      нужно чтобы контейнер имел явную высоту или
-      был достаточно высоким. Здесь таблица сама задаёт высоту.
-    */
     <div
       className="hist-wrap"
       style={{
         overflowX:    'auto',
-        overflowY:    'auto',    // auto по Y тоже нужен для sticky thead в Chrome
-        maxHeight:    '70vh',    // ограничиваем высоту → появляется вертикальный скролл → sticky thead работает
+        overflowY:    'auto',
+        maxHeight:    '70vh',
         borderRadius: 'var(--radius)',
         border:       '1px solid var(--border)',
         boxShadow:    'var(--shadow)',
         position:     'relative',
+        background:   'var(--surface)',
       }}
     >
       <table style={{
@@ -444,57 +455,44 @@ function AllProjectsHistoryTable({ partners, days = 30 }) {
       }}>
         <thead>
           <tr>
-            {/* Угловая ячейка: sticky по X и Y */}
+            {/* Угловая: проект (десктоп) */}
             {!isMobile && (
               <th style={{
                 ...thBase,
-                ...stickyBase,
-                left:       projLeft,
-                zIndex:     130,  // выше всех
-                width:      PROJ_W,
-                minWidth:   PROJ_W,
-                maxWidth:   PROJ_W,
-                padding:    '8px 4px',
-                textAlign:  'center',
-                // box-shadow: и снизу (граница thead) и справа (граница колонки)
-                boxShadow:  'inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border)',
-              }}>
-                {''}
-              </th>
+                position:  'sticky', top: 0, left: 0,
+                zIndex:    130,
+                width:     PROJ_W, minWidth: PROJ_W, maxWidth: PROJ_W,
+                padding:   '8px 2px', textAlign: 'center',
+                boxShadow: 'inset 0 -1px 0 var(--border), inset -1px 0 0 var(--border)',
+              }} />
             )}
 
-            {/* Угловая ячейка «Метрика»: sticky по X и Y */}
+            {/* Угловая: метрика */}
             <th style={{
               ...thBase,
-              ...stickyBase,
-              left:      metricLeft,
+              position:  'sticky', top: 0, left: metricLeft,
               zIndex:    130,
-              width:     METRIC_W,
-              minWidth:  METRIC_W,
+              width:     METRIC_W, minWidth: METRIC_W,
               textAlign: 'left',
-              // тень справа для разделения + снизу
-              boxShadow: '2px 0 6px rgba(0,0,0,0.35), inset -1px 0 0 var(--border), inset 0 -1px 0 var(--border)',
+              boxShadow: '3px 0 8px rgba(0,0,0,0.4), inset -1px 0 0 var(--border), inset 0 -1px 0 var(--border)',
             }}>
               Метрика
             </th>
 
-            {/* Заголовки дат: sticky только по Y */}
+            {/* Даты — sticky только top */}
             {allDates.map((date, colIdx) => (
               <th
                 key={date}
                 style={{
                   ...thBase,
-                  position:   'sticky',
-                  top:        0,
-                  zIndex:     100,
-                  minWidth:   62,
-                  textAlign:  'right',
-                  cursor:     'default',
-                  color:      hoverCol === colIdx ? '#a5b4fc' : 'var(--text-muted)',
-                  transition: 'color 0.15s',
-                  outline:    hoverCol === colIdx
-                    ? '1px solid rgba(165,180,252,0.4)'
-                    : undefined,
+                  zIndex:    100,
+                  minWidth:  70,
+                  textAlign: 'right',
+                  cursor:    'default',
+                  color:     hoverCol === colIdx ? '#a5b4fc' : 'var(--text-muted)',
+                  transition:'color 0.15s',
+                  outline:   hoverCol === colIdx
+                    ? '1px solid rgba(165,180,252,0.4)' : undefined,
                   outlineOffset: '-1px',
                 }}
                 onMouseEnter={() => setHoverCol(colIdx)}
