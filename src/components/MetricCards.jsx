@@ -4,81 +4,81 @@ import { useCountUp } from '../hooks/useCountUp';
 function MetricCards({ partners, snapshot }) {
   if (!snapshot || snapshot.length === 0) return null;
 
-  let totalPU = 0, totalActive = 0, totalBSOnline = 0, totalBSTotal = 0;
-  let sumActivePct = 0, sumBSPct = 0, count = snapshot.length;
+  let totalPU = 0, totalActive = 0, totalBSOnline = 0, totalBSTotal = 0, totalT0Today = 0;
+  let maxGap = 0, maxGapPartner = '';
 
   snapshot.forEach(row => {
-    const pu = parseInt(row.total_pu) || 0;
-    const active = parseInt(row.pu_active) || 0;
-    const bsOn = parseInt(row.bs_online) || 0;
-    const bsTot = parseInt(row.bs_total) || bsOn;
-    totalPU += pu;
-    totalActive += active;
+    const pu    = parseInt(row.total_pu)  || 0;
+    const act   = parseInt(row.pu_active) || 0;
+    const bsOn  = parseInt(row.bs_online) || 0;
+    const bsTot = parseInt(row.bs_total)  || bsOn;
+    const t0    = parseInt(row.today)     || 0;
+    const gap   = parseFloat(row.gap_pct) || 0;
+
+    totalPU      += pu;
+    totalActive  += act;
     totalBSOnline += bsOn;
-    totalBSTotal += bsTot;
-    if (pu > 0) sumActivePct += (active / pu) * 100;
-    if (bsTot > 0) sumBSPct += (bsOn / bsTot) * 100;
+    totalBSTotal  += bsTot;
+    totalT0Today  += t0;
+
+    if (gap > maxGap) { maxGap = gap; maxGapPartner = row.partner; }
   });
 
-  const avgActivePct = count > 0 ? (sumActivePct / count) : 0;
-  const avgBSPct = count > 0 ? (sumBSPct / count) : 0;
+  const activePct = totalPU     > 0 ? (totalActive   / totalPU)     * 100 : 0;
+  const bsPct     = totalBSTotal > 0 ? (totalBSOnline / totalBSTotal) * 100 : 0;
 
-  const fmt = (num) => Number(num).toLocaleString('ru-RU');
+  const animPU     = useCountUp(totalPU);
+  const animActive = useCountUp(totalActive);
+  const animBSOn   = useCountUp(totalBSOnline);
 
-  const animatedTotalPU = useCountUp(totalPU);
-  const animatedActive = useCountUp(totalActive);
-  const animatedBSOnline = useCountUp(totalBSOnline);
+  const fmt = (n) => Number(n).toLocaleString('ru-RU');
 
-  const activeColor = avgActivePct >= 80 ? 'col-green' : (avgActivePct >= 60 ? 'col-yellow' : 'col-red');
-  const bsColor = avgBSPct >= 85 ? 'col-green' : (avgBSPct >= 70 ? 'col-yellow' : 'col-red');
+  const activeColor = activePct >= 80 ? 'col-green' : activePct >= 60 ? 'col-yellow' : 'col-red';
+  const bsColor     = bsPct     >= 85 ? 'col-green' : bsPct     >= 70 ? 'col-yellow' : 'col-red';
 
-  // Карточки (без иконок, как в примере)
   const cards = [
     {
       label: 'Всего ПУ',
-      value: fmt(animatedTotalPU),
-      sub: `${partners.length} проектов`,
-      cls: 'col-plain'
+      value: fmt(animPU),
+      sub:   `${partners.length} проектов`,
+      cls:   'col-plain',
     },
     {
       label: 'Активных ПУ',
-      value: fmt(animatedActive),
-      sub: `${avgActivePct.toFixed(1)}% активных`,
-      cls: activeColor
+      value: fmt(animActive),
+      sub:   `${activePct.toFixed(1)}% активных`,
+      cls:   activeColor,
     },
     {
       label: 'ТО сегодня',
-      value: fmt(snapshot.reduce((acc, r) => acc + (parseInt(r.today) || 0), 0)),
-      sub: 'сбор показаний',
-      cls: 'col-yellow'
+      value: fmt(totalT0Today),
+      sub:   'сбор показаний',
+      cls:   'col-yellow',
     },
     {
       label: 'БС всего',
       value: fmt(totalBSTotal),
-      sub: 'базовых станций',
-      cls: 'col-plain'
+      sub:   'базовых станций',
+      cls:   'col-plain',
     },
     {
       label: 'БС онлайн',
-      value: fmt(animatedBSOnline),
-      sub: `${avgBSPct.toFixed(1)}% онлайн`,
-      cls: bsColor
+      value: fmt(animBSOn),
+      sub:   `${bsPct.toFixed(1)}% онлайн`,
+      cls:   bsColor,
     },
     {
       label: 'Макс. разрыв',
-      value: snapshot.reduce((acc, r) => Math.max(acc, parseFloat(r.gap_pct) || 0), 0).toFixed(1) + '%',
-      sub: snapshot.reduce((acc, r) => {
-        const gap = parseFloat(r.gap_pct) || 0;
-        return gap > acc.gap ? { gap, partner: r.partner } : acc;
-      }, { gap: 0, partner: '' }).partner || '',
-      cls: 'col-red'
-    }
+      value: `${maxGap.toFixed(1)}%`,
+      sub:   maxGapPartner,
+      cls:   'col-red',
+    },
   ];
 
   return (
     <div className="kpi-grid">
       {cards.map((card, idx) => (
-        <div key={idx} className={`kpi-card fade-in-up delay-${(idx % 4) + 1}`}>
+        <div key={idx} className={`kpi-card fade-in-up delay-${(idx % 6) + 1}`}>
           <div className="label">{card.label}</div>
           <div className={`value ${card.cls}`}>{card.value}</div>
           {card.sub && <div className="sub">{card.sub}</div>}
