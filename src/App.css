@@ -329,85 +329,48 @@ body {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow);
+  /* overflow-x: auto — включаем горизонтальный скролл */
   overflow-x: auto;
+  /* overflow-y: visible — чтобы sticky thead работал
+     (родитель не должен иметь overflow отличный от visible/clip) */
+  overflow-y: visible;
+  box-shadow: var(--shadow);
   margin: 0 24px 28px 24px;
+  /* Важно: position: relative нужен для sticky внутри */
+  position: relative;
 }
+
 .hist-wrap table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  /* Фиксируем layout — иначе sticky колонки «плывут» */
+  table-layout: auto;
 }
-.hist-wrap thead th {
-  padding: 9px 10px;
-  font-size: 10px;
-  background: var(--surface2);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  border-bottom: 1px solid var(--border);
-  text-align: center;
-  /* sticky header */
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
+
+/* Все ячейки tbody */
 .hist-wrap tbody td {
   padding: 6px 10px;
-  text-align: center;
+  text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
   font-weight: 600;
-  border-bottom: 1px solid rgba(46,50,72,0.5);
-  transition: outline 0.1s;
+  border-bottom: 1px solid rgba(46,50,72,0.4);
 }
 .hist-wrap tbody tr:last-child td { border-bottom: none; }
 
-/* Sticky колонки */
-.hist-wrap .col-project,
-.hist-wrap .col-metric {
-  position: sticky;
-  z-index: 10;
-  background: var(--surface2);
-}
-.hist-wrap .col-project {
-  left: 0;
-  min-width: 110px;
-  border-right: 2px solid var(--border);
-  font-weight: 700;
-  color: #a5b4fc;
-  text-align: center;
-}
-.hist-wrap .col-metric {
-  left: 110px;
-  min-width: 130px;
-  border-right: 1px solid var(--border);
-  text-align: left;
-  font-weight: 400;
-  color: var(--text-muted);
-  font-size: 11px;
-  padding-left: 12px;
-}
-.hist-wrap thead .col-project { z-index: 110; left: 0; }
-.hist-wrap thead .col-metric  { z-index: 110; left: 110px; }
-
-/* Строки без градиента (Всего ПУ / БС всего) */
-.hist-wrap .row-plain td:not(.col-project):not(.col-metric) {
-  background: transparent !important;
-  color: var(--text-muted) !important;
-  font-weight: 400;
+/* Hover строки */
+.hist-wrap tbody tr:hover td:not([style*="sticky"]) {
+  filter: brightness(1.08);
 }
 
-/* Разделитель между проектами */
-.hist-wrap .project-divider td {
-  padding: 6px 12px;
-  font-weight: 700;
-  color: #a5b4fc;
-  background: rgba(99,102,241,0.08) !important;
-  border-top: 2px solid var(--border);
-  text-align: left;
-  font-size: 12px;
+/* Мобильная адаптация */
+@media (max-width: 639px) {
+  .hist-wrap {
+    margin: 0 12px 20px 12px;
+    /* На мобиле разрешаем горизонтальный скролл без ограничений */
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 /* ===== GRAPH — STATS BLOCK ===== */
