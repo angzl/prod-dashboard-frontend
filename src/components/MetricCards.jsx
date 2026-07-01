@@ -25,14 +25,12 @@ function MetricCards({ partners, snapshot }) {
 
   const fmt = (num) => Number(num).toLocaleString('ru-RU');
 
-  // Анимированные значения
   const animatedTotalPU = useCountUp(totalPU);
   const animatedActive = useCountUp(totalActive);
   const animatedBSOnline = useCountUp(totalBSOnline);
 
-  // Определяем цвет для активных ПУ в зависимости от процента
-  const activeColor = avgActivePct >= 80 ? 'kpi-green' : (avgActivePct >= 60 ? 'kpi-yellow' : 'kpi-red');
-  const bsColor = avgBSPct >= 85 ? 'kpi-green' : (avgBSPct >= 70 ? 'kpi-yellow' : 'kpi-red');
+  const activeColor = avgActivePct >= 80 ? 'col-green' : (avgActivePct >= 60 ? 'col-yellow' : 'col-red');
+  const bsColor = avgBSPct >= 85 ? 'col-green' : (avgBSPct >= 70 ? 'col-yellow' : 'col-red');
 
   // Карточки (без иконок, как в примере)
   const cards = [
@@ -40,7 +38,7 @@ function MetricCards({ partners, snapshot }) {
       label: 'Всего ПУ',
       value: fmt(animatedTotalPU),
       sub: `${partners.length} проектов`,
-      cls: 'kpi-plain'
+      cls: 'col-plain'
     },
     {
       label: 'Активных ПУ',
@@ -52,13 +50,13 @@ function MetricCards({ partners, snapshot }) {
       label: 'ТО сегодня',
       value: fmt(snapshot.reduce((acc, r) => acc + (parseInt(r.today) || 0), 0)),
       sub: 'сбор показаний',
-      cls: 'kpi-yellow'
+      cls: 'col-yellow'
     },
     {
       label: 'БС всего',
       value: fmt(totalBSTotal),
       sub: 'базовых станций',
-      cls: 'kpi-plain'
+      cls: 'col-plain'
     },
     {
       label: 'БС онлайн',
@@ -73,7 +71,7 @@ function MetricCards({ partners, snapshot }) {
         const gap = parseFloat(r.gap_pct) || 0;
         return gap > acc.gap ? { gap, partner: r.partner } : acc;
       }, { gap: 0, partner: '' }).partner || '',
-      cls: 'kpi-red'
+      cls: 'col-red'
     }
   ];
 

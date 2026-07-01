@@ -44,7 +44,6 @@ function PartnerTable({ partners }) {
     return 'pill-red';
   };
 
-  // Определяем максимальный разрыв для прогресс-бара
   const maxGap = data.reduce((acc, r) => Math.max(acc, parseFloat(r.gap_pct) || 0), 0);
 
   return (
@@ -91,40 +90,30 @@ function PartnerTable({ partners }) {
               <tr>
                 <td><span className="proj-chip">{r.partner}</span></td>
                 <td className="c-plain">{fmt(total)}</td>
-
-                {/* Активные ПУ – цвет по activePct */}
                 <td className={activePct >= 80 ? 'c-green' : (activePct >= 60 ? 'c-yellow' : 'c-red')}>
                   {fmt(active)}
                 </td>
                 <td>
                   <div className="bar-wrap">
                     <div className="bar-bg">
-                      <div className={`bar-fill ${activePct >= 80 ? 'bar-green' : (activePct >= 60 ? 'bar-yellow' : 'bar-red')}`} 
+                      <div className={`bar-fill ${activePct >= 80 ? 'bar-green' : (activePct >= 60 ? 'bar-yellow' : 'bar-red')}`}
                            style={{ width: `${Math.min(activePct, 100)}%` }} />
                     </div>
                     <span className={`pill ${getPill(activePct, 80, 60)}`}>{activePct.toFixed(1)}%</span>
                   </div>
                 </td>
-
-                {/* ТО сегодня – цвет по t0TodayPct */}
                 <td className={t0TodayPct >= 75 ? 'c-green' : (t0TodayPct >= 50 ? 'c-yellow' : 'c-red')}>
                   {fmt(t0Today)}
                 </td>
                 <td><span className={`pill ${getPill(t0TodayPct, 75, 50)}`}>{t0TodayPct.toFixed(1)}%</span></td>
-
-                {/* ТО вчера – цвет по t0PrevPct */}
                 <td className={t0PrevPct >= 75 ? 'c-green' : (t0PrevPct >= 50 ? 'c-yellow' : 'c-red')}>
                   {fmt(t0Prev)}
                 </td>
                 <td><span className={`pill ${getPill(t0PrevPct, 75, 50)}`}>{t0PrevPct.toFixed(1)}%</span></td>
-
-                {/* ТО 3 дня – цвет по t0ThreePct */}
                 <td className={t0ThreePct >= 80 ? 'c-green' : (t0ThreePct >= 60 ? 'c-yellow' : 'c-red')}>
                   {fmt(t0Three)}
                 </td>
                 <td><span className={`pill ${getPill(t0ThreePct, 80, 60)}`}>{t0ThreePct.toFixed(1)}%</span></td>
-
-                {/* Разрыв */}
                 <td>
                   <div className="bar-wrap">
                     <div className="bar-bg">
@@ -135,10 +124,7 @@ function PartnerTable({ partners }) {
                     </span>
                   </div>
                 </td>
-
                 <td className="c-plain">{fmt(bsTotal)}</td>
-
-                {/* БС онлайн – цвет по bsPct */}
                 <td className={bsPct >= 85 ? 'c-green' : (bsPct >= 70 ? 'c-yellow' : 'c-red')}>
                   {fmt(bsOn)}
                 </td>

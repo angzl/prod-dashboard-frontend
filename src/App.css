@@ -1,5 +1,5 @@
 /* ============================================================
-   ПОЛНЫЙ CSS – НОВЫЙ ДИЗАЙН + СТАРЫЕ СТИЛИ (СОВМЕЩЕНЫ)
+   НОВЫЙ ДИЗАЙН – ВЗЯТ ИЗ ВАШЕГО ПРИМЕРА
    ============================================================ */
 
 :root {
@@ -11,6 +11,10 @@
   --text-muted: #8892a4;
   --accent: #6366f1;
   --accent2: #8b5cf6;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --red: #ef4444;
+  --teal: #14b8a6;
   --radius: 10px;
   --shadow: 0 4px 24px rgba(0,0,0,0.4);
 }
@@ -25,7 +29,7 @@ body {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
-  padding: 8px 12px;
+  padding: 0;
   margin: 0;
   min-height: 100vh;
 }
@@ -37,19 +41,21 @@ body {
   padding: 0;
 }
 
-/* ---- HEADER (новый стиль) ---- */
+/* ===== HEADER ===== */
 .page-header {
   display: flex;
   align-items: center;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
+  padding: 0 24px;
+  padding-top: 16px;
   flex-wrap: wrap;
 }
 .page-header h1 {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
-  color: var(--text);
   letter-spacing: -0.3px;
+  color: var(--text);
   margin: 0;
 }
 .badge-date {
@@ -62,25 +68,70 @@ body {
   white-space: nowrap;
 }
 
-/* ---- KPI CARDS (сетка) ---- */
+/* ===== TABS ===== */
+.tabs {
+  display: flex;
+  gap: 0;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  margin-bottom: 0;
+}
+.tab {
+  padding: 14px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.tab:hover {
+  color: var(--text);
+}
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+/* ===== SHARED ELEMENTS ===== */
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px;
+}
+
+/* ===== KPI CARDS ===== */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 24px;
+  padding: 0 24px;
 }
 .kpi-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 18px;
+  padding: 14px 16px;
   position: relative;
   overflow: hidden;
 }
 .kpi-card::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 3px;
   background: linear-gradient(90deg, var(--accent), var(--accent2));
 }
@@ -89,88 +140,78 @@ body {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 .kpi-card .value {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1;
 }
 .kpi-card .sub {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: 3px;
 }
-.kpi-green  { color: #4ade80; }
-.kpi-yellow { color: #facc15; }
-.kpi-red    { color: #f87171; }
-.kpi-plain  { color: var(--text); }
+.col-green  { color: #4ade80; }
+.col-yellow { color: #facc15; }
+.col-red    { color: #f87171; }
+.col-teal   { color: #2dd4bf; }
+.col-plain  { color: var(--text); }
 
-/* ---- SECTION TITLE (для карточек) ---- */
-.section-title,
-.card-header {
-  font-size: 15px;
+/* ===== PILLS & CHIPS ===== */
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text);
-  margin-bottom: 14px;
+}
+.pill-green  { background: rgba(22,163,74,0.2); color: #4ade80; }
+.pill-yellow { background: rgba(202,138,4,0.2); color: #fcd34d; }
+.pill-red    { background: rgba(220,38,38,0.2); color: #f87171; }
+
+.proj-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  background: rgba(99,102,241,0.15);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 20px;
+  color: #a5b4fc;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ===== BAR (progress) ===== */
+.bar-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
 }
+.bar-bg {
+  flex: 1;
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  min-width: 60px;
+}
+.bar-fill {
+  height: 5px;
+  border-radius: 3px;
+}
+.bar-green  { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.bar-yellow { background: linear-gradient(90deg, #ca8a04, #fcd34d); }
+.bar-red    { background: linear-gradient(90deg, #dc2626, #f87171); }
 
-/* ---- ОБЩИЕ КАРТОЧКИ ---- */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  box-shadow: var(--shadow);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* ---- ВКЛАДКИ ---- */
-.tabs {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 20px;
-  border-bottom: 2px solid var(--border);
-  padding-bottom: 6px;
-}
-.tab {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  font-size: 16px;
-  font-weight: 500;
-  padding: 8px 18px;
-  border-radius: 8px 8px 0 0;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-.tab:hover {
-  color: var(--text);
-  background: var(--surface2);
-}
-.tab.active {
-  color: var(--text);
-  background: var(--surface2);
-  border-bottom: 3px solid var(--accent);
-}
-
-/* ---- ТАБЛИЦЫ (сводная) ---- */
+/* ===== TABLES (summary) ===== */
 .table-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow);
-  margin-bottom: 20px;
+  margin: 0 24px 28px 24px;
   overflow-x: auto;
 }
-
 .table-wrap table {
   width: 100%;
   border-collapse: collapse;
@@ -180,7 +221,7 @@ body {
   background: var(--surface2);
 }
 .table-wrap thead th {
-  padding: 10px 14px;
+  padding: 10px 13px;
   text-align: left;
   font-weight: 600;
   color: var(--text-muted);
@@ -201,67 +242,21 @@ body {
   background: rgba(99,102,241,0.05);
 }
 .table-wrap tbody td {
-  padding: 8px 14px;
+  padding: 8px 13px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .table-wrap tbody td:first-child {
   font-weight: 600;
-  color: var(--text);
 }
 
-/* Цветовые классы для чисел */
-.c-green  { color: #4ade80; }
-.c-yellow { color: #facc15; }
-.c-red    { color: #f87171; }
+/* Цветовые классы для ячеек (фоновые) */
+.c-green  { background: rgba(22,163,74,0.25); color: #86efac; }
+.c-yellow { background: rgba(202,138,4,0.25); color: #fde047; }
+.c-red    { background: rgba(220,38,38,0.25); color: #fca5a5; }
 .c-plain  { color: var(--text-muted); }
 
-/* Пиллы (метки) */
-.pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.pill-green  { background: rgba(22,163,74,0.2);  color: #4ade80; }
-.pill-yellow { background: rgba(202,138,4,0.2);  color: #fcd34d; }
-.pill-red    { background: rgba(220,38,38,0.2);  color: #f87171; }
-
-/* Чипсы проектов */
-.proj-chip {
-  display: inline-block;
-  padding: 3px 10px;
-  background: rgba(99,102,241,0.15);
-  border: 1px solid rgba(99,102,241,0.3);
-  border-radius: 20px;
-  color: #a5b4fc;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-/* Прогресс-бары */
-.bar-wrap {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.bar-bg {
-  flex: 1;
-  height: 5px;
-  background: var(--border);
-  border-radius: 3px;
-  min-width: 50px;
-}
-.bar-fill {
-  height: 5px;
-  border-radius: 3px;
-}
-.bar-green  { background: linear-gradient(90deg, #16a34a, #4ade80); }
-.bar-yellow { background: linear-gradient(90deg, #ca8a04, #fcd34d); }
-.bar-red    { background: linear-gradient(90deg, #dc2626, #f87171); }
-
-/* ---- ИСТОРИЧЕСКАЯ ТАБЛИЦА (с градиентом) ---- */
+/* ===== HISTORY TABLE ===== */
 .hist-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -269,7 +264,7 @@ body {
   overflow: hidden;
   box-shadow: var(--shadow);
   overflow-x: auto;
-  margin-bottom: 20px;
+  margin: 0 24px 28px 24px;
 }
 .hist-wrap table {
   width: 100%;
@@ -277,7 +272,7 @@ body {
   font-size: 12px;
 }
 .hist-wrap thead th {
-  padding: 8px 10px;
+  padding: 9px 10px;
   font-size: 10px;
   background: var(--surface2);
   color: var(--text-muted);
@@ -287,10 +282,10 @@ body {
   text-align: center;
 }
 .hist-wrap tbody td {
-  padding: 5px 10px;
+  padding: 6px 10px;
   text-align: center;
   font-variant-numeric: tabular-nums;
-  transition: opacity 0.1s;
+  position: relative;
 }
 .hist-wrap tbody td.gc {
   font-weight: 600;
@@ -322,78 +317,163 @@ body {
   border-bottom: none;
 }
 
-/* ---- ФИКСАЦИЯ КОЛОНОК В ИСТОРИЧЕСКОЙ ТАБЛИЦЕ (переопределение) ---- */
-.hist-wrap {
-  position: relative;
-  overflow: auto;
-  max-height: 600px;
+/* ---- Фиксация колонок в исторической таблице ---- */
+.hist-wrap .col-project,
+.hist-wrap .col-metric {
+  position: sticky;
+  z-index: 10;
+  background: var(--surface);
 }
-
-.hist-wrap table {
-  border-collapse: separate;
-  border-spacing: 0;
-  width: 100%;
+.hist-wrap .col-project {
+  left: 0;
+  min-width: 100px;
+  border-right: 2px solid var(--border);
 }
-
-/* Заголовки – фиксируем сверху */
+.hist-wrap .col-metric {
+  left: 100px;
+  min-width: 110px;
+  border-right: 2px solid var(--border);
+}
+.hist-wrap thead .col-project {
+  z-index: 110;
+  left: 0;
+}
+.hist-wrap thead .col-metric {
+  z-index: 110;
+  left: 100px;
+}
 .hist-wrap thead th {
   position: sticky;
   top: 0;
-  z-index: 30;
+  z-index: 100;
   background: var(--surface2);
-  border-bottom: 2px solid var(--border);
 }
 
-/* Фиксируем ПЕРВУЮ колонку (Метрика) */
-.hist-wrap .col-metric {
-  position: sticky;
-  left: 0;
-  z-index: 20;
+/* ===== CHARTS ===== */
+.charts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 24px 20px 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.proj-selector {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.proj-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.proj-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.proj-btn.active {
+  background: rgba(99,102,241,0.2);
+  border-color: var(--accent);
+  color: #a5b4fc;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 0 24px 24px 24px;
+}
+.stat-card {
   background: var(--surface);
-  border-right: 2px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-card .s-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.stat-card .s-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+.stat-card .s-sub {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
-/* Заголовок первой колонки должен быть поверх данных */
-.hist-wrap thead .col-metric {
-  z-index: 40;
-  left: 0;
+.chart-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin: 0 24px 24px 24px;
+  box-shadow: var(--shadow);
+}
+.chart-block .chart-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  text-align: center;
+  letter-spacing: 0.3px;
+}
+.chart-block canvas {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+  max-height: 200px;
+}
+.chart-legend {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.chart-legend-line {
+  width: 24px;
+  height: 3px;
+  border-radius: 2px;
+}
+.chart-legend-dash {
+  width: 24px;
+  height: 0;
+  border-top: 2px dashed;
 }
 
-/* Все остальные ячейки – без позиционирования */
-.hist-wrap tbody td:not(.col-metric) {
-  position: static;
+/* ===== CARDS (общие) ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin: 0 24px 20px 24px;
+  box-shadow: var(--shadow);
+  width: auto;
 }
 
-/* Чтобы фон первой колонки не перекрывал заголовок при скролле, 
-   у заголовка z-index выше */
-.hist-wrap thead th {
-  z-index: 30;
-}
-
-/* Для чересстрочной подсветки – фиксированные ячейки должны иметь тот же фон, что и строка */
-.hist-wrap tbody tr:nth-child(even) td.col-metric {
-  background: rgba(255,255,255,0.02);
-}
-
-/* ---- АНИМАЦИИ ---- */
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.fade-in-up {
-  animation: fadeInUp 0.5s ease forwards;
-}
-.delay-1 { animation-delay: 0.05s; }
-.delay-2 { animation-delay: 0.10s; }
-.delay-3 { animation-delay: 0.15s; }
-.delay-4 { animation-delay: 0.20s; }
-.delay-5 { animation-delay: 0.25s; }
-
-.tab-content {
-  animation: fadeInUp 0.3s ease forwards;
-}
-
-/* ---- ДРУГИЕ КОМПОНЕНТЫ (совместимость) ---- */
+/* ===== OTHER ===== */
 select, button {
   background: var(--surface2);
   color: var(--text);
@@ -411,18 +491,11 @@ button:hover {
   background: var(--border);
 }
 
-.bs-chart-container {
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 12px;
-  border: 1px solid var(--border);
-}
-
 .dashboard-row {
   display: grid;
   grid-template-columns: 3fr 1fr;
   gap: 16px;
-  margin-bottom: 20px;
+  margin: 0 24px 20px 24px;
 }
 .row-item {
   min-width: 0;
@@ -436,50 +509,44 @@ button:hover {
   }
 }
 
-/* ---- ФИКСАЦИЯ КОЛОНОК В СВОДНОЙ ТАБЛИЦЕ (дублируем для надёжности) ---- */
-.table-wrap .col-project,
-.table-wrap .col-metric {
-  position: sticky;
-  z-index: 10;
-  background: var(--surface);
-}
-.table-wrap .col-project {
-  left: 0;
-  min-width: 100px;
-  border-right: 2px solid var(--border);
-}
-.table-wrap .col-metric {
-  left: 100px;
-  min-width: 110px;
-  border-right: 2px solid var(--border);
-}
-.table-wrap thead .col-project {
-  z-index: 110;
-  left: 0;
-}
-.table-wrap thead .col-metric {
-  z-index: 110;
-  left: 100px;
-}
-.table-wrap thead th {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: var(--surface2);
-}
-.table-wrap tbody tr:nth-child(even) td:not(.col-project):not(.col-metric) {
-  background: rgba(255,255,255,0.02);
-}
-.table-wrap .last-metric-row td {
-  border-bottom: 3px solid var(--accent2) !important;
-}
-.table-wrap .project-separator td {
-  padding: 0 !important;
-  border: none !important;
-  background: transparent !important;
-}
-.table-wrap .project-separator td.col-project,
-.table-wrap .project-separator td.col-metric {
-  background: transparent !important;
-  border: none !important;
+/* Адаптивность */
+@media (max-width: 768px) {
+  .tabs {
+    padding: 0 12px;
+  }
+  .tab {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+  .kpi-grid {
+    padding: 0 12px;
+  }
+  .table-wrap {
+    margin: 0 12px 20px 12px;
+  }
+  .hist-wrap {
+    margin: 0 12px 20px 12px;
+  }
+  .page-header {
+    padding: 0 12px;
+  }
+  .section-title {
+    padding: 0 12px;
+  }
+  .stat-row {
+    grid-template-columns: 1fr 1fr;
+    margin: 0 12px 16px 12px;
+  }
+  .chart-block {
+    margin: 0 12px 16px 12px;
+  }
+  .charts-header {
+    margin: 0 12px 16px 12px;
+  }
+  .card {
+    margin: 0 12px 16px 12px;
+  }
+  .dashboard-row {
+    margin: 0 12px 16px 12px;
+  }
 }
