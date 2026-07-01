@@ -22,31 +22,102 @@ function PartnerTable({ partners }) {
   if (!data || data.length === 0) return <div className="state-msg">Нет данных</div>;
 
   const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
-
-  const pillCls = (v, good, med) =>
-    v >= good ? 'pill-green' : v >= med ? 'pill-yellow' : 'pill-red';
-
-  const cellCls = (v, good, med) =>
-    v >= good ? 'c-green' : v >= med ? 'c-yellow' : 'c-red';
-
-  const barCls = (v, good, med) =>
-    v >= good ? 'bar-green' : v >= med ? 'bar-yellow' : 'bar-red';
+  const pillCls = (v, good, med) => v >= good ? 'pill-green' : v >= med ? 'pill-yellow' : 'pill-red';
+  const barCls  = (v, good, med) => v >= good ? 'bar-green'  : v >= med ? 'bar-yellow'  : 'bar-red';
 
   const maxGap = data.reduce((a, r) => Math.max(a, parseFloat(r.gap_pct) || 0), 0);
 
-  /* sticky-колонка «Проект» */
+  // sticky колонка «Проект»
   const stickyTh = {
     position: 'sticky', left: 0, zIndex: 20,
     background: 'var(--surface2)',
-    boxShadow: '2px 0 0 0 var(--border)',
+    boxShadow: '3px 0 6px rgba(0,0,0,0.3), inset -1px 0 0 var(--border)',
     whiteSpace: 'nowrap',
   };
   const stickyTd = (rowBg) => ({
     position: 'sticky', left: 0, zIndex: 10,
     background: rowBg,
-    boxShadow: '2px 0 0 0 var(--border)',
+    boxShadow: '3px 0 6px rgba(0,0,0,0.25), inset -1px 0 0 var(--border)',
     whiteSpace: 'nowrap',
   });
+
+  const tdBase = {
+    padding: '0 13px',
+    height: 44,
+    borderBottom: '1px solid var(--border)',
+    fontVariantNumeric: 'tabular-nums',
+    whiteSpace: 'nowrap',
+    verticalAlign: 'middle',
+  };
+
+  // Ячейка: число крупно + % мелко под ним
+  const NumPctCell = ({ num, pct, good, med }) => {
+    const pCls = pillCls(pct, good, med);
+    const bCls = barCls(pct, good, med);
+    return (
+      <td style={tdBase}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2 }}>
+          {fmt(num)}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+          <div style={{ width: 36, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+            <div className={`bar-fill ${bCls}`} style={{ width: `${Math.min(pct, 100)}%`, height: 3 }} />
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 600,
+            color: pCls === 'pill-green' ? '#4ade80' : pCls === 'pill-yellow' ? '#fcd34d' : '#f87171' }}>
+            {pct.toFixed(1)}%
+          </span>
+        </div>
+      </td>
+    );
+  };
+
+  // Ячейка: только % с баром (разрыв)
+  const BarCell = ({ pct, barW, good, med, invert }) => {
+    const cls = invert
+      ? (pct <= good ? 'pill-green' : pct <= med ? 'pill-yellow' : 'pill-red')
+      : pillCls(pct, good, med);
+    const bCls = invert
+      ? (pct <= good ? 'bar-green' : pct <= med ? 'bar-yellow' : 'bar-red')
+      : barCls(pct, good, med);
+    return (
+      <td style={tdBase}>
+        <div className="bar-wrap">
+          <div className="bar-bg" style={{ minWidth: 48 }}>
+            <div className={`bar-fill ${bCls}`} style={{ width: `${barW}%` }} />
+          </div>
+          <span className={`pill ${cls}`} style={{ fontSize: 11 }}>{pct.toFixed(1)}%</span>
+        </div>
+      </td>
+    );
+  };
+
+  // Ячейка: БС онлайн/всего объединённая
+  const BsCell = ({ bsOn, bsTot, bsPct }) => {
+    const pCls = pillCls(bsPct, 85, 70);
+    const bCls = barCls(bsPct, 85, 70);
+    const textColor = bsPct >= 85 ? '#4ade80' : bsPct >= 70 ? '#fcd34d' : '#f87171';
+    return (
+      <td style={tdBase}>
+        {/* онлайн / всего */}
+        <div style={{ fontSize: 13, fontWeight: 600, color: textColor, lineHeight: 1.2 }}>
+          {fmt(bsOn)}
+          <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 3 }}>
+            / {fmt(bsTot)}
+          </span>
+        </div>
+        {/* мини-бар + % */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+          <div style={{ width: 36, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+            <div className={`bar-fill ${bCls}`} style={{ width: `${Math.min(bsPct, 100)}%`, height: 3 }} />
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 600, color: textColor }}>
+            {bsPct.toFixed(1)}%
+          </span>
+        </div>
+      </td>
+    );
+  };
 
   return (
     <div style={{
@@ -58,21 +129,22 @@ function PartnerTable({ partners }) {
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ background: 'var(--surface2)' }}>
+            {/* Sticky заголовок Проект */}
             <th style={{
-              ...stickyTh, padding: '10px 13px', textAlign: 'left',
+              ...stickyTh,
+              padding: '10px 14px', textAlign: 'left',
               fontSize: 11, fontWeight: 600, color: 'var(--text-muted)',
               textTransform: 'uppercase', letterSpacing: '0.5px',
               borderBottom: '1px solid var(--border)',
+              minWidth: 140,
             }}>
               Проект
             </th>
             {[
-              'Всего ПУ', 'Активных ПУ', '% активных',
-              'ТО сегодня', '% ТО сег.',
-              'ТО вчера',  '% ТО вч.',
-              'ТО 3 дня',  '% ТО 3д.',
+              '% активных',
+              'ТО сегодня', 'ТО вчера', 'ТО 3 дня',
               'Разрыв %',
-              'БС всего',  'БС онлайн', '% БС',
+              'БС',
             ].map(h => (
               <th key={h} style={{
                 padding: '10px 13px', textAlign: 'left',
@@ -103,87 +175,45 @@ function PartnerTable({ partners }) {
             const bsTot     = parseInt(r.bs_total)  || bsOn;
             const bsPct     = bsTot > 0 ? (bsOn / bsTot) * 100 : 0;
 
-            const rowBg     = i % 2 === 1 ? 'rgba(255,255,255,0.012)' : 'var(--surface)';
+            const rowBg     = i % 2 === 1 ? 'rgba(255,255,255,0.013)' : 'var(--surface)';
             const barGapPct = Math.min((gap / (maxGap || 1)) * 100, 100);
-            const gapBarCls = gap > 30 ? 'bar-red' : gap > 15 ? 'bar-yellow' : 'bar-green';
-            const gapPilCls = gap > 30 ? 'pill-red' : gap > 15 ? 'pill-yellow' : 'pill-green';
-
-            const tdStyle = {
-              padding: '8px 13px',
-              borderBottom: '1px solid var(--border)',
-              fontVariantNumeric: 'tabular-nums',
-              whiteSpace: 'nowrap',
-            };
 
             return (
               <tr
                 key={r.partner}
                 style={{ background: rowBg, transition: 'background 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.06)'}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.07)'}
                 onMouseLeave={e => e.currentTarget.style.background = rowBg}
               >
-                {/* Проект — sticky */}
-                <td style={{ ...stickyTd(rowBg), ...tdStyle, fontWeight: 600 }}>
-                  <span className="proj-chip">{r.partner}</span>
-                </td>
-
-                {/* Всего ПУ */}
-                <td style={{ ...tdStyle, color: 'var(--text-muted)' }}>{fmt(total)}</td>
-
-                {/* Активных ПУ */}
-                <td className={cellCls(activePct, 80, 60)} style={tdStyle}>{fmt(active)}</td>
-
-                {/* % активных — бар */}
-                <td style={tdStyle}>
-                  <div className="bar-wrap">
-                    <div className="bar-bg">
-                      <div className={`bar-fill ${barCls(activePct, 80, 60)}`}
-                           style={{ width: `${Math.min(activePct, 100)}%` }} />
-                    </div>
-                    <span className={`pill ${pillCls(activePct, 80, 60)}`}>
-                      {activePct.toFixed(1)}%
-                    </span>
+                {/* Проект sticky — chip + Всего/активных под ним */}
+                <td style={{ ...stickyTd(rowBg), ...tdBase, minWidth: 140 }}>
+                  <span className="proj-chip" style={{ fontSize: 12 }}>{r.partner}</span>
+                  <div style={{
+                    fontSize: 10, color: 'var(--text-muted)',
+                    marginTop: 3, fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {fmt(active)}
+                    <span style={{ opacity: 0.6 }}> / {fmt(total)}</span>
                   </div>
                 </td>
 
-                {/* ТО сегодня */}
-                <td className={cellCls(todayPct, 75, 50)} style={tdStyle}>{fmt(t0Today)}</td>
-                <td style={tdStyle}>
-                  <span className={`pill ${pillCls(todayPct, 75, 50)}`}>{todayPct.toFixed(1)}%</span>
-                </td>
+                {/* % активных — только бар+% */}
+                <BarCell pct={activePct} barW={Math.min(activePct, 100)} good={80} med={60} />
+
+                {/* ТО сегодня: число + мини-бар+% */}
+                <NumPctCell num={t0Today} pct={todayPct} good={75} med={50} />
 
                 {/* ТО вчера */}
-                <td className={cellCls(prevPct, 75, 50)} style={tdStyle}>{fmt(t0Prev)}</td>
-                <td style={tdStyle}>
-                  <span className={`pill ${pillCls(prevPct, 75, 50)}`}>{prevPct.toFixed(1)}%</span>
-                </td>
+                <NumPctCell num={t0Prev} pct={prevPct} good={75} med={50} />
 
                 {/* ТО 3 дня */}
-                <td className={cellCls(threePct, 80, 60)} style={tdStyle}>{fmt(t0Three)}</td>
-                <td style={tdStyle}>
-                  <span className={`pill ${pillCls(threePct, 80, 60)}`}>{threePct.toFixed(1)}%</span>
-                </td>
+                <NumPctCell num={t0Three} pct={threePct} good={80} med={60} />
 
-                {/* Разрыв % — бар */}
-                <td style={tdStyle}>
-                  <div className="bar-wrap">
-                    <div className="bar-bg">
-                      <div className={`bar-fill ${gapBarCls}`} style={{ width: `${barGapPct}%` }} />
-                    </div>
-                    <span className={`pill ${gapPilCls}`}>{gap.toFixed(1)}%</span>
-                  </div>
-                </td>
+                {/* Разрыв % */}
+                <BarCell pct={gap} barW={barGapPct} good={5} med={15} invert />
 
-                {/* БС всего */}
-                <td style={{ ...tdStyle, color: 'var(--text-muted)' }}>{fmt(bsTot)}</td>
-
-                {/* БС онлайн */}
-                <td className={cellCls(bsPct, 85, 70)} style={tdStyle}>{fmt(bsOn)}</td>
-
-                {/* % БС */}
-                <td style={tdStyle}>
-                  <span className={`pill ${pillCls(bsPct, 85, 70)}`}>{bsPct.toFixed(1)}%</span>
-                </td>
+                {/* БС: онлайн/всего + % */}
+                <BsCell bsOn={bsOn} bsTot={bsTot} bsPct={bsPct} />
               </tr>
             );
           })}
