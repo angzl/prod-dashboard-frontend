@@ -18,6 +18,7 @@ const LS = {
   PARTNERS:  'dm_partners',
   SNAPSHOT:  'dm_snapshot',
   HISTORY:   'dm_history',
+  TIMELINE:  'dm_timeline',
   SETTINGS:  'dm_settings',
   LAST_OK:   'dm_last_ok',
 };
@@ -41,6 +42,7 @@ const initialState = {
   partners:  lsGet(LS.PARTNERS, []),
   snapshot:  lsGet(LS.SNAPSHOT, []),
   history:   lsGet(LS.HISTORY,  {}),
+  timeline:  lsGet(LS.TIMELINE, { columns: [], data: {} }),
   settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
   lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего успешного fetch
   serverLastOk: null,                   // last_ok с сервера (unix timestamp)
@@ -54,7 +56,7 @@ function reducer(state, action) {
       return { ...state, status: action.payload, errorMsg: action.error ?? null };
 
     case 'FETCH_OK': {
-      const { partners, snapshot, historyKey, historyData, serverLastOk } = action.payload;
+      const { partners, snapshot, historyKey, historyData, timeline, serverLastOk } = action.payload;
       const lastOk  = new Date().toISOString();
       const history = { ...state.history };
       if (historyKey && historyData !== undefined)
@@ -63,6 +65,7 @@ function reducer(state, action) {
       if (partners !== undefined) lsSet(LS.PARTNERS, partners);
       if (snapshot  !== undefined) lsSet(LS.SNAPSHOT,  snapshot);
       if (historyKey) lsSet(LS.HISTORY, history);
+      if (timeline !== undefined) lsSet(LS.TIMELINE, timeline);
       lsSet(LS.LAST_OK, lastOk);
 
       return {
@@ -70,6 +73,7 @@ function reducer(state, action) {
         partners:     partners     ?? state.partners,
         snapshot:     snapshot     ?? state.snapshot,
         history,
+        timeline:     timeline     ?? state.timeline,
         lastOk,
         serverLastOk: serverLastOk ?? state.serverLastOk,
         status:       'ok',
@@ -90,10 +94,18 @@ function reducer(state, action) {
     }
 
     case 'CLEAR_CACHE': {
-      [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.LAST_OK].forEach(k => {
+      [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.TIMELINE, LS.LAST_OK].forEach(k => {
         try { localStorage.removeItem(k); } catch {}
       });
-      return { ...state, partners: [], snapshot: [], history: {}, lastOk: null, serverLastOk: null };
+      return {
+        ...state,
+        partners: [],
+        snapshot: [],
+        history: {},
+        timeline: { columns: [], data: {} },
+        lastOk: null,
+        serverLastOk: null,
+      };
     }
 
     default: return state;
@@ -132,7 +144,16 @@ export function DataProvider({ children }) {
 
       dispatch({ type: 'FETCH_OK', payload: { partners, snapshot } });
 
-      // 3. История — параллельно, не блокируем
+      // 3. Timeline (полная история с агрегацией)
+      try {
+        const tRes = await fetch(`${apiBase}/api/history/timeline`);
+        if (tRes.ok) {
+          const timeline = await tRes.json();
+          dispatch({ type: 'FETCH_OK', payload: { timeline } });
+        }
+      } catch {}
+
+      // 4. История по дням — параллельно, не блокируем
       const { historyDays } = state.settings;
       partners.forEach(async partner => {
         try {

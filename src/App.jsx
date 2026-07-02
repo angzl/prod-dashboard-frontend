@@ -112,7 +112,7 @@ function AppInner() {
           <PartnerTable />
 
           <div className="section-title">📊 История по всем проектам</div>
-          <AllProjectsHistoryTable partners={partners} days={settings.historyDays} />
+          <AllProjectsHistoryTable partners={partners} mode="timeline" />
         </div>
       )}
 
