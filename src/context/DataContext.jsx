@@ -1,12 +1,13 @@
 /**
  * DataContext — фронтовый стор.
  *
- * Стратегия:
+ * Стратегия (push-модель, без polling):
  *   1. При старте читаем данные из localStorage (мгновенно показываем)
- *   2. Делаем ОДИН fetch с API чтобы синхронизировать свежие данные
- *   3. Далее опрашиваем только /api/cache/status (лёгкий эндпоинт)
- *      — если last_ok изменился → делаем полный fetch
- *   4. Никакого тяжёлого polling с фронта — вся нагрузка на бэкенд
+ *   2. Открываем ОДНО SSE-соединение (/api/stream) на всё время работы страницы
+ *   3. Сервер САМ присылает новые данные, как только его внутренний кеш
+ *      обновился (раз в interval_seconds на бэкенде) — никаких повторных
+ *      HTTP-запросов с фронта не требуется, независимо от числа открытых вкладок
+ *   4. При разрыве соединения браузер (EventSource) автоматически переподключается
  */
 import React, {
   createContext, useContext, useEffect,
@@ -24,10 +25,11 @@ const LS = {
 };
 
 const DEFAULT_SETTINGS = {
-  pollStatusMs:    15_000,   // как часто фронт проверяет /api/cache/status
   historyDays:     30,
-  offlineThreshMs: 300_000,  // 5 мин без ответа → показываем баннер
+  offlineThreshMs: 300_000,  // сколько без сообщений от сервера → баннер "недоступен"
+  intervalMs:      60_000,   // интервал обновления кеша НА СЕРВЕРЕ (для AdminPanel)
 };
+
 
 function lsGet(key, fallback = null) {
   try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; }
@@ -44,7 +46,7 @@ const initialState = {
   history:   lsGet(LS.HISTORY,  {}),
   timeline:  lsGet(LS.TIMELINE, { columns: [], data: {}, ranges: {} }),
   settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
-  lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего успешного fetch
+  lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего полученного сообщения от сервера
   serverLastOk: null,                   // last_ok с сервера (unix timestamp)
   status:    'idle',   // idle | loading | ok | error
   errorMsg:  null,
@@ -55,24 +57,22 @@ function reducer(state, action) {
     case 'SET_STATUS':
       return { ...state, status: action.payload, errorMsg: action.error ?? null };
 
-    case 'FETCH_OK': {
-      const { partners, snapshot, historyKey, historyData, timeline, serverLastOk } = action.payload;
-      const lastOk  = new Date().toISOString();
-      const history = { ...state.history };
-      if (historyKey && historyData !== undefined)
-        history[historyKey] = historyData;
+    /** Пришло сообщение из SSE-стрима — полный снимок данных с сервера */
+    case 'STREAM_OK': {
+      const { partners, snapshot, history, timeline, serverLastOk } = action.payload;
+      const lastOk = new Date().toISOString();
 
       if (partners !== undefined) lsSet(LS.PARTNERS, partners);
       if (snapshot  !== undefined) lsSet(LS.SNAPSHOT,  snapshot);
-      if (historyKey) lsSet(LS.HISTORY, history);
-      if (timeline !== undefined) lsSet(LS.TIMELINE, timeline);
+      if (history   !== undefined) lsSet(LS.HISTORY,   history);
+      if (timeline  !== undefined) lsSet(LS.TIMELINE,  timeline);
       lsSet(LS.LAST_OK, lastOk);
 
       return {
         ...state,
         partners:     partners     ?? state.partners,
         snapshot:     snapshot     ?? state.snapshot,
-        history,
+        history:      history      ?? state.history,
         timeline:     timeline     ?? state.timeline,
         lastOk,
         serverLastOk: serverLastOk ?? state.serverLastOk,
@@ -81,10 +81,7 @@ function reducer(state, action) {
       };
     }
 
-    case 'SET_SERVER_LAST_OK':
-      return { ...state, serverLastOk: action.payload };
-
-    case 'FETCH_ERROR':
+    case 'STREAM_ERROR':
       return { ...state, status: 'error', errorMsg: action.payload };
 
     case 'UPDATE_SETTINGS': {
@@ -118,108 +115,67 @@ const DataContext = createContext(null);
 export function DataProvider({ children }) {
   const apiBase   = import.meta.env.VITE_API_URL || '';
   const [state, dispatch] = useReducer(reducer, initialState);
-  const statusTimerRef    = useRef(null);
-  const fetchingRef       = useRef(false);
-  // Запоминаем last_ok с сервера который уже загружен
-  const loadedServerTs    = useRef(null);
+  const esRef        = useRef(null);
+  const reconnectRef  = useRef(null);
 
-  /* ── Полный fetch данных с сервера ─────────────────────── */
-  const fetchAll = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
+  /* ── Обработка одного сообщения из SSE-потока ──────────────── */
+  const handleMessage = useCallback((ev) => {
+    try {
+      const data = JSON.parse(ev.data);
+      dispatch({
+        type: 'STREAM_OK',
+        payload: {
+          partners:     data.partners,
+          snapshot:     data.snapshot,
+          history:      data.history,
+          timeline:     data.timeline,
+          serverLastOk: data.last_ok,
+        },
+      });
+    } catch {
+      // Игнорируем битое сообщение — следующее придёт штатно
+    }
+  }, []);
+
+  /* ── Подключение / переподключение SSE ─────────────────────── */
+  const connect = useCallback(() => {
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
+    }
+
     dispatch({ type: 'SET_STATUS', payload: 'loading' });
 
-    try {
-      // 1. Партнёры
-      const pRes = await fetch(`${apiBase}/api/partners`);
-      if (!pRes.ok) throw new Error(`partners ${pRes.status}`);
-      const partners = await pRes.json();
+    const es = new EventSource(`${apiBase}/api/stream`);
+    esRef.current = es;
 
-      // 2. Снепшот
-      const params = new URLSearchParams();
-      partners.forEach(p => params.append('partners', p));
-      const sRes = await fetch(`${apiBase}/api/snapshot?${params}`);
-      if (!sRes.ok) throw new Error(`snapshot ${sRes.status}`);
-      const snapshot = await sRes.json();
+    es.onmessage = handleMessage;
 
-      dispatch({ type: 'FETCH_OK', payload: { partners, snapshot } });
-
-      // 3. Timeline (полная история с агрегацией)
-      try {
-        const tRes = await fetch(`${apiBase}/api/history/timeline`);
-        if (tRes.ok) {
-          const timeline = await tRes.json();
-          dispatch({ type: 'FETCH_OK', payload: { timeline } });
-        }
-      } catch {}
-
-      // 4. История по дням — параллельно, не блокируем
-      const { historyDays } = state.settings;
-      partners.forEach(async partner => {
-        try {
-          const hRes = await fetch(
-            `${apiBase}/api/history?partner=${encodeURIComponent(partner)}&days=${historyDays}`
-          );
-          if (!hRes.ok) return;
-          const historyData = await hRes.json();
-          dispatch({
-            type: 'FETCH_OK',
-            payload: { historyKey: `${partner}_${historyDays}`, historyData },
-          });
-        } catch {}
-      });
-
-    } catch (err) {
-      dispatch({ type: 'FETCH_ERROR', payload: err.message });
-    } finally {
-      fetchingRef.current = false;
-    }
-  }, [apiBase, state.settings.historyDays]);
-
-  /* ── Лёгкий опрос статуса кеша ─────────────────────────── */
-  const pollStatus = useCallback(async () => {
-    try {
-      const res  = await fetch(`${apiBase}/api/cache/status`);
-      if (!res.ok) return;
-      const data = await res.json();
-
-      const serverTs = data.last_ok;  // unix float или null
-
-      // Если сервер обновил данные с момента нашего последнего fetch → тянем
-      if (serverTs && serverTs !== loadedServerTs.current) {
-        loadedServerTs.current = serverTs;
-        await fetchAll();
-      } else {
-        // Просто сохраняем серверный ts для индикации
-        dispatch({ type: 'SET_SERVER_LAST_OK', payload: serverTs });
+    es.onerror = () => {
+      // EventSource сам будет пытаться переподключиться, но на всякий случай
+      // подстрахуемся ручным reconnect, если браузер закрыл соединение совсем.
+      dispatch({ type: 'STREAM_ERROR', payload: 'Соединение с сервером потеряно' });
+      if (es.readyState === EventSource.CLOSED) {
+        clearTimeout(reconnectRef.current);
+        reconnectRef.current = setTimeout(connect, 5000);
       }
-    } catch {
-      // Сеть упала — не меняем статус, данные из localStorage остаются
-    }
-  }, [apiBase, fetchAll]);
+    };
+  }, [apiBase, handleMessage]);
 
-  /* ── Запуск: сначала fetchAll, потом polling статуса ────── */
+  /* ── Запуск при монтировании ───────────────────────────────── */
   useEffect(() => {
-    // Первичный fetch при монтировании
-    fetchAll();
+    connect();
+    return () => {
+      clearTimeout(reconnectRef.current);
+      if (esRef.current) esRef.current.close();
+    };
+  }, [connect]);
 
-    // Polling статуса — лёгкий
-    statusTimerRef.current = setInterval(pollStatus, state.settings.pollStatusMs);
-    return () => clearInterval(statusTimerRef.current);
-  }, []); // только при монтировании
-
-  // Перезапускаем polling статуса при смене интервала
-  useEffect(() => {
-    clearInterval(statusTimerRef.current);
-    statusTimerRef.current = setInterval(pollStatus, state.settings.pollStatusMs);
-    return () => clearInterval(statusTimerRef.current);
-  }, [state.settings.pollStatusMs, pollStatus]);
-
-  /* ── Публичные методы ───────────────────────────────────── */
+  /* ── Публичные методы ───────────────────────────────────────── */
   const updateSettings = useCallback(async (patch) => {
     dispatch({ type: 'UPDATE_SETTINGS', payload: patch });
 
-    // Отправляем на бэкенд
+    // Отправляем на бэкенд (интервал обновления кеша / глубина истории)
     const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
     const params = new URLSearchParams({ pin, ...patch });
     try {
@@ -240,14 +196,12 @@ export function DataProvider({ children }) {
   }, [apiBase]);
 
   const refreshNow = useCallback(async () => {
-    // Просим сервер обновить кеш
+    // Просим сервер обновить кеш — свежие данные придут через SSE автоматически
     const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
     try {
       await fetch(`${apiBase}/api/admin/refresh?pin=${pin}`, { method: 'POST' });
     } catch {}
-    // И тянем свежие данные
-    await fetchAll();
-  }, [apiBase, fetchAll]);
+  }, [apiBase]);
 
   const getHistory = (partner, days) =>
     state.history[`${partner}_${days}`] ?? null;

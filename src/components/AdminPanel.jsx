@@ -116,15 +116,8 @@ const SERVER_INTERVALS = [
   { label: '30 мин',  ms: 1_800_000 },
 ];
 
-// Как часто ФРОНТ проверяет /api/cache/status (лёгкий запрос)
-const POLL_INTERVALS = [
-  { label: '5 сек',   ms: 5_000 },
-  { label: '15 сек',  ms: 15_000 },
-  { label: '30 сек',  ms: 30_000 },
-  { label: '1 мин',   ms: 60_000 },
-];
-
 // Для обратной совместимости
+
 const INTERVALS = SERVER_INTERVALS;
 
 const DAYS_OPTIONS = [7, 14, 30, 60, 90, 180, 365];
@@ -257,9 +250,11 @@ function AdminPanelContent() {
           Серверное обновление
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-          Бэкенд опрашивает БД по расписанию. Все пользователи читают из серверного кеша —
-          сколько бы вкладок ни было открыто, к БД идёт ровно один запрос.
+          Бэкенд опрашивает БД по расписанию. Все пользователи получают обновления
+          через push-соединение (SSE) — сколько бы вкладок ни было открыто,
+          ни к БД, ни к API никаких повторных запросов с фронта не идёт.
         </div>
+
 
         <SettingRow
           label="Интервал обновления на сервере"
@@ -273,18 +268,8 @@ function AdminPanelContent() {
         </SettingRow>
 
         <SettingRow
-          label="Проверка обновлений (фронт)"
-          sub="Как часто браузер проверяет /api/cache/status — лёгкий запрос"
-        >
-          <SegmentControl
-            value={settings.pollStatusMs}
-            options={POLL_INTERVALS}
-            onChange={(ms) => save({ pollStatusMs: ms })}
-          />
-        </SettingRow>
-
-        <SettingRow
           label="Глубина истории"
+
           sub="За сколько дней загружать исторические данные"
         >
           <SegmentControl
