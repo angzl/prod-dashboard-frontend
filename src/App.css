@@ -89,6 +89,18 @@ body {
   position: sticky;
   top: 0;
   z-index: 50;
+  /* Горизонтальный скролл, если вкладки не помещаются на узких экранах */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar {
+  height: 3px;
+}
+.tabs::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
 }
 .tab {
   padding: 14px 22px;

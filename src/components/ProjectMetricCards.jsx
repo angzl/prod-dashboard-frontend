@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 function colorTheme(value, good, medium) {
   if (value >= good)   return { cls: 'col-green',  accent: 'accent-green',  bar: 'bar-green',  hex: '#4ade80' };
@@ -30,25 +30,34 @@ function Sparkline({ values, color }) {
   );
 }
 
-function ProjectMetricCards({ projectData, partner }) {
+/* memo + useMemo: раньше карточки пересчитывали все метрики при любом
+   ре-рендере родителя. Теперь пересчёт только при смене projectData. */
+const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData, partner }) {
   if (!projectData) {
     return <div className="state-msg">⚠️ Нет данных для проекта <strong>{partner}</strong></div>;
   }
 
-  const total   = parseInt(projectData.total_pu)  || 0;
-  const active  = parseInt(projectData.pu_active) || 0;
-  const t0Today = parseInt(projectData.today)     || 0;
-  const t0Prev  = parseInt(projectData.date_1)    || 0;
-  const t0Three = parseInt(projectData.date_3)    || 0;
-  const bsOn    = parseInt(projectData.bs_online) || 0;
-  const bsTotal = parseInt(projectData.bs_total)  || bsOn;
-  const gap     = parseFloat(projectData.gap_pct) || 0;
-
-  const activePct  = total   > 0 ? (active  / total)   * 100 : 0;
-  const todayPct   = total   > 0 ? (t0Today / total)   * 100 : 0;
-  const prevPct    = total   > 0 ? (t0Prev  / total)   * 100 : 0;
-  const threePct   = total   > 0 ? (t0Three / total)   * 100 : 0;
-  const bsPct      = bsTotal > 0 ? (bsOn    / bsTotal) * 100 : 0;
+  const {
+    total, active, t0Today, t0Prev, t0Three, bsOn, bsTotal, gap,
+    activePct, todayPct, prevPct, threePct, bsPct,
+  } = useMemo(() => {
+    const total   = parseInt(projectData.total_pu)  || 0;
+    const active  = parseInt(projectData.pu_active) || 0;
+    const t0Today = parseInt(projectData.today)     || 0;
+    const t0Prev  = parseInt(projectData.date_1)    || 0;
+    const t0Three = parseInt(projectData.date_3)    || 0;
+    const bsOn    = parseInt(projectData.bs_online) || 0;
+    const bsTotal = parseInt(projectData.bs_total)  || bsOn;
+    const gap     = parseFloat(projectData.gap_pct) || 0;
+    return {
+      total, active, t0Today, t0Prev, t0Three, bsOn, bsTotal, gap,
+      activePct: total   > 0 ? (active  / total)   * 100 : 0,
+      todayPct:  total   > 0 ? (t0Today / total)   * 100 : 0,
+      prevPct:   total   > 0 ? (t0Prev  / total)   * 100 : 0,
+      threePct:  total   > 0 ? (t0Three / total)   * 100 : 0,
+      bsPct:     bsTotal > 0 ? (bsOn    / bsTotal) * 100 : 0,
+    };
+  }, [projectData]);
 
   const fmt = (n) => Number(n).toLocaleString('ru-RU');
 
@@ -252,6 +261,6 @@ function ProjectMetricCards({ projectData, partner }) {
       ))}
     </div>
   );
-}
+});
 
 export default ProjectMetricCards;

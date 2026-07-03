@@ -1,16 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import Select from 'react-select';
 
 import { DataProvider, useDataStore } from './context/DataContext';
 import ApiStatusBar       from './components/ApiStatusBar';
-import Graph              from './components/Graph';
-import MultiGraph         from './components/MultiGraph';
 import PartnerTable       from './components/PartnerTable';
 import AllProjectsHistoryTable from './components/AllProjectsHistoryTable';
 import MetricCards        from './components/MetricCards';
 import ProjectMetricCards from './components/ProjectMetricCards';
 import AdminPanel         from './components/AdminPanel';
+import ErrorBoundary      from './components/ErrorBoundary';
+import Skeleton           from './components/Skeleton';
 import './App.css';
+
+/* Тяжёлые графические компоненты (plotly.js ~3 МБ) грузим лениво.
+   Они попадают в отдельный чанк и подгружаются только когда пользователь
+   открывает вкладки «Детализация» или «Сравнение». Вкладка «Сводка»
+   (самая частая) грузится быстро, без plotly в начальном бандле. */
+const Graph      = lazy(() => import('./components/Graph'));
+const MultiGraph = lazy(() => import('./components/MultiGraph'));
 
 /* ── react-select тёмная тема ─────────────────────────────── */
 const selectStyles = {
@@ -158,10 +165,14 @@ function AppInner() {
             days={days}
           />
 
-          {/* Графики */}
+          {/* Графики — ленивая загрузка plotly.js */}
           <div className="card">
             <div className="card-header">📈 Графики</div>
-            {partner && <Graph partner={partner} days={days} />}
+            {partner && (
+              <Suspense fallback={<Skeleton height={360} text="Загрузка графиков..." />}>
+                <Graph partner={partner} days={days} />
+              </Suspense>
+            )}
           </div>
         </div>
       )}
@@ -190,7 +201,10 @@ function AppInner() {
                 ))}
               </select>
             </div>
-            <MultiGraph projects={compareProjects.map(p => p.value)} days={days} />
+            {/* Графики — ленивая загрузка plotly.js */}
+            <Suspense fallback={<Skeleton height={480} text="Загрузка графиков..." />}>
+              <MultiGraph projects={compareProjects.map(p => p.value)} days={days} />
+            </Suspense>
           </div>
         </div>
       )}
@@ -205,11 +219,13 @@ function AppInner() {
   );
 }
 
-/* ── Оборачиваем в DataProvider ───────────────────────────── */
+/* ── Оборачиваем в ErrorBoundary + DataProvider ───────────── */
 export default function App() {
   return (
-    <DataProvider>
-      <AppInner />
-    </DataProvider>
+    <ErrorBoundary>
+      <DataProvider>
+        <AppInner />
+      </DataProvider>
+    </ErrorBoundary>
   );
 }

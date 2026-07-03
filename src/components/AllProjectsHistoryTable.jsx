@@ -247,36 +247,36 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
   const columnGroups = isTimeline ? buildColumnGroups(columns) : [];
   const multiProject = projectList.length > 1;
 
-  const rowRanges = {};
-  projectList.forEach(partner => {
-    rowRanges[partner] = {};
-    METRICS.forEach(m => {
-      if (m.noBg) return;
-
-      // Глобальные диапазоны считаются по всем сырым срезам (бэкендом для
-      // timeline, либо фронтом для detail) — используем их для заливки,
-      // чтобы масштаб учитывал все значения, а не только то, что в таблице.
-      const srv = rangesFromServer?.[partner]?.[m.key];
-      if (srv && typeof srv.min === 'number' && typeof srv.max === 'number') {
-        rowRanges[partner][m.key] = { min: srv.min, max: srv.max };
-        return;
-      }
-
-      // Fallback: считаем по отображаемым колонкам
-      const grouped = projectGrouped[partner];
-      const vals = columns
-        .map(col => {
-          const row = grouped[col.key];
-          if (!row) return NaN;
-          return clampVal(m.key, parseNum(row[m.key]));
-        })
-        .filter(v => !isNaN(v));
-      rowRanges[partner][m.key] = {
-        min: vals.length ? Math.min(...vals) : 0,
-        max: vals.length ? Math.max(...vals) : 0,
-      };
+  // Раньше этот цикл по всем партнёрам × метрикам выполнялся при КАЖДОМ
+  // рендере (включая hover-движения мыши). Теперь — мемоизирован и
+  // пересчитывается только при смене самих данных.
+  const rowRanges = useMemo(() => {
+    const ranges = {};
+    projectList.forEach(partner => {
+      ranges[partner] = {};
+      METRICS.forEach(m => {
+        if (m.noBg) return;
+        const srv = rangesFromServer?.[partner]?.[m.key];
+        if (srv && typeof srv.min === 'number' && typeof srv.max === 'number') {
+          ranges[partner][m.key] = { min: srv.min, max: srv.max };
+          return;
+        }
+        const grouped = projectGrouped[partner];
+        const vals = columns
+          .map(col => {
+            const row = grouped[col.key];
+            if (!row) return NaN;
+            return clampVal(m.key, parseNum(row[m.key]));
+          })
+          .filter(v => !isNaN(v));
+        ranges[partner][m.key] = {
+          min: vals.length ? Math.min(...vals) : 0,
+          max: vals.length ? Math.max(...vals) : 0,
+        };
+      });
     });
-  });
+    return ranges;
+  }, [projectList, columns, projectGrouped, rangesFromServer]);
 
   const stickyProj = {
     position: 'sticky', left: 0, zIndex: 12,
