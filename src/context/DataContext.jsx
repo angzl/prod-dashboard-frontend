@@ -16,12 +16,13 @@ import React, {
 
 /* ── localStorage ──────────────────────────────────────────── */
 const LS = {
-  PARTNERS:  'dm_partners',
-  SNAPSHOT:  'dm_snapshot',
-  HISTORY:   'dm_history',
-  TIMELINE:  'dm_timeline',
-  SETTINGS:  'dm_settings',
-  LAST_OK:   'dm_last_ok',
+  PARTNERS:      'dm_partners',
+  SNAPSHOT:      'dm_snapshot',
+  HISTORY:       'dm_history',
+  TIMELINE:      'dm_timeline',
+  SETTINGS:      'dm_settings',
+  LAST_OK:       'dm_last_ok',
+  SERVER_LAST_OK:'dm_server_last_ok',
 };
 
 const DEFAULT_SETTINGS = {
@@ -47,7 +48,7 @@ const initialState = {
   timeline:  lsGet(LS.TIMELINE, { columns: [], data: {}, ranges: {} }),
   settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
   lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего полученного сообщения от сервера
-  serverLastOk: null,                   // last_ok с сервера (unix timestamp)
+  serverLastOk: lsGet(LS.SERVER_LAST_OK, null),  // last_ok с сервера (unix timestamp)
   status:    'idle',   // idle | loading | ok | error
   errorMsg:  null,
 };
@@ -60,6 +61,23 @@ function reducer(state, action) {
     /** Пришло сообщение из SSE-стрима — полный снимок данных с сервера */
     case 'STREAM_OK': {
       const { partners, snapshot, history, timeline, serverLastOk } = action.payload;
+
+      // Если серверный last_ok не изменился и у нас уже есть данные —
+      // это повторная отправка того же снимка (например, при переподключении
+      // или обновлении страницы). Не обновляем state и не перезаписываем
+      // lastOk, чтобы избежать ненужных ре-рендеров и «прыжков» таймстампа.
+      if (
+        serverLastOk !== undefined &&
+        serverLastOk === state.serverLastOk &&
+        (state.partners?.length || state.snapshot?.length)
+      ) {
+        return {
+          ...state,
+          status:   'ok',
+          errorMsg: null,
+        };
+      }
+
       const lastOk = new Date().toISOString();
 
       if (partners !== undefined) lsSet(LS.PARTNERS, partners);
@@ -67,6 +85,7 @@ function reducer(state, action) {
       if (history   !== undefined) lsSet(LS.HISTORY,   history);
       if (timeline  !== undefined) lsSet(LS.TIMELINE,  timeline);
       lsSet(LS.LAST_OK, lastOk);
+      if (serverLastOk !== undefined) lsSet(LS.SERVER_LAST_OK, serverLastOk);
 
       return {
         ...state,
@@ -91,7 +110,7 @@ function reducer(state, action) {
     }
 
     case 'CLEAR_CACHE': {
-      [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.TIMELINE, LS.LAST_OK].forEach(k => {
+      [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.TIMELINE, LS.LAST_OK, LS.SERVER_LAST_OK].forEach(k => {
         try { localStorage.removeItem(k); } catch {}
       });
       return {
@@ -144,7 +163,14 @@ export function DataProvider({ children }) {
       esRef.current = null;
     }
 
-    dispatch({ type: 'SET_STATUS', payload: 'loading' });
+    // Не показываем 'loading', если у нас уже есть закешированные данные —
+    // иначе при обновлении страницы весь UI мигает спиннерами, хотя данные
+    // уже есть в localStorage и покажутся мгновенно.
+    const hasCached =
+      lsGet(LS.PARTNERS, []).length > 0 || lsGet(LS.SNAPSHOT, []).length > 0;
+    if (!hasCached) {
+      dispatch({ type: 'SET_STATUS', payload: 'loading' });
+    }
 
     const es = new EventSource(`${apiBase}/api/stream`);
     esRef.current = es;
