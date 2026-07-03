@@ -201,14 +201,16 @@ export function DataProvider({ children }) {
   const updateSettings = useCallback(async (patch) => {
     dispatch({ type: 'UPDATE_SETTINGS', payload: patch });
 
-    // Отправляем на бэкенд (интервал обновления кеша / глубина истории)
+    // Отправляем на бэкенд (интервал обновления кеша / глубина истории).
+    // Бэкенд ждёт pin, interval_seconds, history_days как QUERY-параметры,
+    // а не в теле запроса — иначе FastAPI возвращает 422.
     const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
-    const params = new URLSearchParams({ pin, ...patch });
+    const params = new URLSearchParams({ pin });
+    if (patch.interval_seconds !== undefined) params.set('interval_seconds', patch.interval_seconds);
+    if (patch.history_days !== undefined)     params.set('history_days',     patch.history_days);
     try {
-      await fetch(`${apiBase}/api/admin/settings`, {
+      await fetch(`${apiBase}/api/admin/settings?${params.toString()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: params,
       });
     } catch {}
   }, [apiBase]);
