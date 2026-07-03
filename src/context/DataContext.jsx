@@ -42,7 +42,7 @@ const initialState = {
   partners:  lsGet(LS.PARTNERS, []),
   snapshot:  lsGet(LS.SNAPSHOT, []),
   history:   lsGet(LS.HISTORY,  {}),
-  timeline:  lsGet(LS.TIMELINE, { columns: [], data: {} }),
+  timeline:  lsGet(LS.TIMELINE, { columns: [], data: {}, ranges: {} }),
   settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
   lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего успешного fetch
   serverLastOk: null,                   // last_ok с сервера (unix timestamp)
@@ -102,7 +102,7 @@ function reducer(state, action) {
         partners: [],
         snapshot: [],
         history: {},
-        timeline: { columns: [], data: {} },
+        timeline: { columns: [], data: {}, ranges: {} },
         lastOk: null,
         serverLastOk: null,
       };

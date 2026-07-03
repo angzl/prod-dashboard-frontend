@@ -180,6 +180,11 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
 
   const isTimeline = mode === 'timeline';
 
+  // Метрики, которые физически ограничены диапазоном [0, 100]
+  const CLAMP_0_100 = { gap_pct: true };
+  const clampVal = (key, v) =>
+    CLAMP_0_100[key] ? Math.max(0, Math.min(100, v)) : v;
+
   const { columns, projectGrouped, projectList, rangesFromServer } = useMemo(() => {
     const list = (partners || []).slice().sort();
 
@@ -200,11 +205,30 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
       list.map(p => [p, getHistory(p, days) ?? []])
     );
     const grouped = buildDailyGrouped(allData);
+
+    // В режиме detail тоже считаем ranges по всем сырым срезам,
+    // а не только по последнему срезу дня, который попадает в таблицу.
+    const rawRanges = {};
+    list.forEach(partner => {
+      rawRanges[partner] = {};
+      const rows = allData[partner] || [];
+      METRICS.forEach(m => {
+        if (m.noBg) return;
+        const vals = rows
+          .map(r => clampVal(m.key, parseNum(r[m.key])))
+          .filter(v => !isNaN(v));
+        rawRanges[partner][m.key] = {
+          min: vals.length ? Math.min(...vals) : 0,
+          max: vals.length ? Math.max(...vals) : 0,
+        };
+      });
+    });
+
     const dates = Array.from(
       new Set(Object.values(grouped).flatMap(g => Object.keys(g)))
     ).sort();
     const cols = dates.map(d => ({ type: 'day', key: d, label: d.slice(5) }));
-    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null };
+    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: rawRanges };
   }, [isTimeline, timeline, partners, days, getHistory]);
 
   const hasAnyData = isTimeline
@@ -223,27 +247,23 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
   const columnGroups = isTimeline ? buildColumnGroups(columns) : [];
   const multiProject = projectList.length > 1;
 
-  // Метрики, которые физически ограничены диапазоном [0, 100]
-  const CLAMP_0_100 = { gap_pct: true };
-
-  const clampVal = (key, v) =>
-    CLAMP_0_100[key] ? Math.max(0, Math.min(100, v)) : v;
-
   const rowRanges = {};
   projectList.forEach(partner => {
     rowRanges[partner] = {};
-    const grouped = projectGrouped[partner];
     METRICS.forEach(m => {
       if (m.noBg) return;
 
-      // В режиме timeline предпочтаем глобальные диапазоны, посчитанные
-      // бэкендом по всем сырым срезам (включая те, что не попали в вывод).
+      // Глобальные диапазоны считаются по всем сырым срезам (бэкендом для
+      // timeline, либо фронтом для detail) — используем их для заливки,
+      // чтобы масштаб учитывал все значения, а не только то, что в таблице.
       const srv = rangesFromServer?.[partner]?.[m.key];
-      if (isTimeline && srv && typeof srv.min === 'number' && typeof srv.max === 'number') {
+      if (srv && typeof srv.min === 'number' && typeof srv.max === 'number') {
         rowRanges[partner][m.key] = { min: srv.min, max: srv.max };
         return;
       }
 
+      // Fallback: считаем по отображаемым колонкам
+      const grouped = projectGrouped[partner];
       const vals = columns
         .map(col => {
           const row = grouped[col.key];
@@ -442,7 +462,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
         boxShadow: 'var(--shadow)', position: 'relative', background: 'var(--surface)',
       }}
     >
-      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%', tableLayout: 'auto' }}>
+      <table style={{ borderCollapse: 'collapse', fontSize: 12, width: 'auto', tableLayout: 'auto' }}>
         <thead>
           {isTimeline && columnGroups.length > 0 && (
             <tr>
