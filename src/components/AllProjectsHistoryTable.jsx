@@ -69,24 +69,6 @@ const METRICS = [
     },
   },
   {
-    key:   't0_now',
-    label: 'ТО сегодня',
-    pctFn: (row) => {
-      const total = parseFloat(row['total_on_platform']);
-      const val   = parseFloat(row['t0_now']);
-      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
-    },
-  },
-  {
-    key:   't0_prev_day',
-    label: 'ТО вчера',
-    pctFn: (row) => {
-      const total = parseFloat(row['total_on_platform']);
-      const val   = parseFloat(row['t0_prev_day']);
-      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
-    },
-  },
-  {
     key:   't0_three_days',
     label: 'ТО 3 дня',
     pctFn: (row) => {
@@ -95,7 +77,6 @@ const METRICS = [
       return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
     },
   },
-  { key: 'gap_pct', label: 'Разрыв →ТО-3', isPct: true, invert: true },
   { key: 'bs_total',  label: 'БС всего',  noBg: true },
   {
     key:   'bs_online',

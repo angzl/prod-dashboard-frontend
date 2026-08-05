@@ -10,7 +10,7 @@ const MetricCards = React.memo(function MetricCards({ partners, snapshot }) {
   // Мемоизируем агрегаты — пересчёт только при изменении snapshot.
   const {
     totalPU, totalActive, totalBSOnline, totalBSTotal,
-    totalT0Today, maxGap, maxGapPartner, activePct, bsPct,
+    totalT0Today, todayPct, maxGap, maxGapPartner, activePct, bsPct,
   } = useMemo(() => {
     let totalPU = 0, totalActive = 0, totalBSOnline = 0, totalBSTotal = 0, totalT0Today = 0;
     let maxGap = 0, maxGapPartner = '';
@@ -30,7 +30,8 @@ const MetricCards = React.memo(function MetricCards({ partners, snapshot }) {
     });
     const activePct = totalPU      > 0 ? (totalActive   / totalPU)     * 100 : 0;
     const bsPct     = totalBSTotal > 0 ? (totalBSOnline / totalBSTotal) * 100 : 0;
-    return { totalPU, totalActive, totalBSOnline, totalBSTotal, totalT0Today, maxGap, maxGapPartner, activePct, bsPct };
+    const todayPct  = totalPU      > 0 ? (totalT0Today  / totalPU)     * 100 : 0;
+    return { totalPU, totalActive, totalBSOnline, totalBSTotal, totalT0Today, todayPct, maxGap, maxGapPartner, activePct, bsPct };
   }, [snapshot]);
 
   const animPU     = useCountUp(totalPU);
@@ -58,8 +59,8 @@ const MetricCards = React.memo(function MetricCards({ partners, snapshot }) {
     {
       label: 'ТО сегодня',
       value: fmt(totalT0Today),
-      sub:   'сбор показаний',
-      cls:   'col-yellow',
+      sub:   `${todayPct.toFixed(1)}% сбора`,
+      cls:   todayPct >= 75 ? 'col-green' : todayPct >= 50 ? 'col-yellow' : 'col-red',
     },
     {
       label: 'БС всего',
