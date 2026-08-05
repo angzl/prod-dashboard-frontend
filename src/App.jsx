@@ -5,6 +5,7 @@ import { DataProvider, useDataStore } from './context/DataContext';
 import ApiStatusBar       from './components/ApiStatusBar';
 import PartnerTable       from './components/PartnerTable';
 import AllProjectsHistoryTable from './components/AllProjectsHistoryTable';
+import AllProjectsTotalTable   from './components/AllProjectsTotalTable';
 import MetricCards        from './components/MetricCards';
 import ProjectMetricCards from './components/ProjectMetricCards';
 import AdminPanel         from './components/AdminPanel';
@@ -14,10 +15,11 @@ import './App.css';
 
 /* Тяжёлые графические компоненты (plotly.js ~3 МБ) грузим лениво.
    Они попадают в отдельный чанк и подгружаются только когда пользователь
-   открывает вкладки «Детализация» или «Сравнение». Вкладка «Сводка»
-   (самая частая) грузится быстро, без plotly в начальном бандле. */
-const Graph      = lazy(() => import('./components/Graph'));
-const MultiGraph = lazy(() => import('./components/MultiGraph'));
+   открывает вкладки «Детализация», «Сравнение» или «Весь прод». Вкладка
+   «Сводка» (самая частая) грузится быстро, без plotly в начальном бандле. */
+const Graph       = lazy(() => import('./components/Graph'));
+const MultiGraph  = lazy(() => import('./components/MultiGraph'));
+const TotalGraphs = lazy(() => import('./components/TotalGraphs'));
 
 /* ── react-select тёмная тема ─────────────────────────────── */
 const selectStyles = {
@@ -81,6 +83,7 @@ function AppInner() {
 
   const TABS = [
     { id: 'overview', label: '📋 Сводка'      },
+    { id: 'total',    label: '🌐 Весь прод'   },
     { id: 'detail',   label: '📈 Детализация' },
     { id: 'compare',  label: '📊 Сравнение'   },
     { id: 'admin',    label: '⚙️ Настройки'   },
@@ -120,6 +123,21 @@ function AppInner() {
 
           <div className="section-title">📊 История по всем проектам</div>
           <AllProjectsHistoryTable partners={partners} mode="timeline" />
+        </div>
+      )}
+
+      {/* ══ ВЕСЬ ПРОД (АГРЕГИРОВАННАЯ ИСТОРИЯ) ══════════════ */}
+      {activeTab === 'total' && (
+        <div className="tab-content">
+          <MetricCards partners={partners} snapshot={snapshot} />
+
+          <div className="section-title">🌐 Агрегированная история (весь прод)</div>
+          <AllProjectsTotalTable />
+
+          <div className="section-title">📈 Детализация с графиками</div>
+          <Suspense fallback={<Skeleton height={400} text="Загрузка графиков..." />}>
+            <TotalGraphs />
+          </Suspense>
         </div>
       )}
 
