@@ -65,6 +65,38 @@ function LastUpdateBadge() {
   );
 }
 
+/* ── Индикатор обновления + кнопка «Обновить» (без PIN) ──── */
+function HeaderStatus() {
+  const { refreshNow } = useDataStore();
+  const [busy, setBusy] = useState(false);
+
+  const onRefresh = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await refreshNow(); } finally { setTimeout(() => setBusy(false), 600); }
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+      <LastUpdateBadge />
+      <button
+        onClick={onRefresh}
+        disabled={busy}
+        title="Обновить данные сейчас (не требует PIN)"
+        style={{
+          padding: '4px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+          background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
+          color: '#a5b4fc', cursor: busy ? 'wait' : 'pointer',
+          opacity: busy ? 0.6 : 1,
+          transition: 'all 0.15s',
+        }}
+      >
+        {busy ? '⏳ Обновление...' : '🔄 Обновить'}
+      </button>
+    </div>
+  );
+}
+
 /* ── Основное приложение (внутри DataProvider) ────────────── */
 function AppInner() {
   const {
@@ -97,7 +129,7 @@ function AppInner() {
       {/* Шапка */}
       <div className="page-header">
         <h1>📊 Prod Monitoring Dashboard</h1>
-        <LastUpdateBadge />
+        <HeaderStatus />
       </div>
 
       {/* Вкладки */}

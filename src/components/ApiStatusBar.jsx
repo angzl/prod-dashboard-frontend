@@ -59,7 +59,7 @@ export default function ApiStatusBar() {
             color: '#fff', cursor: 'pointer',
           }}
         >
-          Повторить
+          Обновить
         </button>
       )}
 

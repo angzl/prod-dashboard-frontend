@@ -137,24 +137,44 @@ export function DataProvider({ children }) {
   const esRef        = useRef(null);
   const reconnectRef  = useRef(null);
 
+  /* ── Применить полный снимок данных с сервера (SSE или HTTP) ── */
+  const applyServerPayload = useCallback((data) => {
+    if (!data) return;
+    dispatch({
+      type: 'STREAM_OK',
+      payload: {
+        partners:     data.partners,
+        snapshot:     data.snapshot,
+        history:      data.history,
+        timeline:     data.timeline,
+        serverLastOk: data.last_ok,
+      },
+    });
+  }, []);
+
   /* ── Обработка одного сообщения из SSE-потока ──────────────── */
   const handleMessage = useCallback((ev) => {
     try {
-      const data = JSON.parse(ev.data);
-      dispatch({
-        type: 'STREAM_OK',
-        payload: {
-          partners:     data.partners,
-          snapshot:     data.snapshot,
-          history:      data.history,
-          timeline:     data.timeline,
-          serverLastOk: data.last_ok,
-        },
-      });
+      applyServerPayload(JSON.parse(ev.data));
     } catch {
       // Игнорируем битое сообщение — следующее придёт штатно
     }
-  }, []);
+  }, [applyServerPayload]);
+
+  /* ── HTTP-fallback: полный снимок одним GET /api/all ──────────
+   * Страховка на случай, если SSE-стрим не работает (буферизующий
+   * прокси, оборванный туннель, «зависшее» соединение). Сервер при
+   * этом сам обновит кеш, если он устарел (ensure_fresh на бэкенде),
+   * поэтому пользователь гарантированно получает свежие данные. */
+  const fetchAll = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/all`);
+      if (!res.ok) return;
+      applyServerPayload(await res.json());
+    } catch {
+      // Сервер недоступен — останемся на локальном кеше
+    }
+  }, [apiBase, applyServerPayload]);
 
   /* ── Подключение / переподключение SSE ─────────────────────── */
   const connect = useCallback(() => {
@@ -177,6 +197,11 @@ export function DataProvider({ children }) {
 
     es.onmessage = handleMessage;
 
+    // Страховка при заходе: даже если SSE молчит/буферизуется прокси,
+    // свежий снимок придёт обычным HTTP-запросом (idempotent — reducer
+    // пропустит дубликат с тем же serverLastOk).
+    fetchAll();
+
     es.onerror = () => {
       // EventSource сам будет пытаться переподключиться, но на всякий случай
       // подстрахуемся ручным reconnect, если браузер закрыл соединение совсем.
@@ -196,6 +221,37 @@ export function DataProvider({ children }) {
       if (esRef.current) esRef.current.close();
     };
   }, [connect]);
+
+  /* ── freshness refs (для watchdog / visibilitychange) ───────── */
+  const lastOkRef = useRef(state.lastOk);
+  useEffect(() => { lastOkRef.current = state.lastOk; }, [state.lastOk]);
+
+  /* ── Возврат на вкладку → сразу подтянуть свежие данные ───────
+   * Главный кейс «старые данные при заходе»: пользователь возвращается
+   * на страницу через несколько часов, а SSE-соединение давно умерло
+   * (или было прибито прокси). Без этого данные остались бы
+   * с прошлого захода из localStorage. */
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const last = lastOkRef.current;
+      const ageMs = last ? Date.now() - new Date(last).getTime() : Infinity;
+      if (ageMs > 60_000) fetchAll();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [fetchAll]);
+
+  /* ── Watchdog: SSE молчит слишком долго → HTTP-fallback ─────── */
+  useEffect(() => {
+    const id = setInterval(() => {
+      const last = lastOkRef.current;
+      const ageMs = last ? Date.now() - new Date(last).getTime() : Infinity;
+      const limit = Math.max(state.settings.intervalMs, 60_000) + 60_000;
+      if (ageMs > limit) fetchAll();
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [fetchAll, state.settings.intervalMs]);
 
   /* ── Публичные методы ───────────────────────────────────────── */
   const updateSettings = useCallback(async (patch) => {
@@ -224,12 +280,15 @@ export function DataProvider({ children }) {
   }, [apiBase]);
 
   const refreshNow = useCallback(async () => {
-    // Просим сервер обновить кеш — свежие данные придут через SSE автоматически
-    const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
+    // Публичный endpoint БЕЗ PIN: обновление кеша — безопасная операция
+    // (лёгкое чтение SQLite), она не должна требовать пароль админа.
+    // 1) просим сервер обновить кеш; 2) сразу забираем свежий снимок
+    // по HTTP — не ждём SSE, т.к. он может не работать через прокси.
     try {
-      await fetch(`${apiBase}/api/admin/refresh?pin=${pin}`, { method: 'POST' });
+      await fetch(`${apiBase}/api/refresh`, { method: 'POST' });
     } catch {}
-  }, [apiBase]);
+    await fetchAll();
+  }, [apiBase, fetchAll]);
 
   const getHistory = (partner, days) =>
     state.history[`${partner}_${days}`] ?? null;
