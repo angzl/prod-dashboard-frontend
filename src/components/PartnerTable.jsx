@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useDataStore } from '../context/DataContext';
+import InfoTip from './InfoTip';
+import { fmtSnapDt } from '../utils/datetime';
 
 /* ── Утилиты ──────────────────────────────────────────────── */
 const fmt = (n) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
@@ -86,6 +88,16 @@ const BsCell = React.memo(function BsCell({ bsOn, bsTot, bsPct }) {
   );
 });
 
+/* Ячейка «Срез БД» — время среза строки из локальной базы данных */
+const SnapDtCell = React.memo(function SnapDtCell({ snapDatetime }) {
+  const label = fmtSnapDt(snapDatetime);
+  return (
+    <td style={{ ...tdBase, color: 'var(--text-muted)', fontSize: 11 }}>
+      {label || '—'}
+    </td>
+  );
+});
+
 /* ── Строка таблицы (мемоизирована) ───────────────────────── */
 const TableRow = React.memo(function TableRow({ row, rowBg }) {
   const total     = parseInt(row.total_pu)  || 0;
@@ -126,20 +138,31 @@ const TableRow = React.memo(function TableRow({ row, rowBg }) {
         </span>
       </td>
       <BsCell bsOn={bsOn} bsTot={bsTot} bsPct={bsPct} />
+      <SnapDtCell snapDatetime={row.snap_datetime} />
     </tr>
   );
 });
 
 /* ── Конфигурация сортируемых колонок ─────────────────────── */
 const COLUMNS = [
-  { key: 'partner',   label: 'Проект',    field: 'partner',     type: 'str',  minWidth: 130 },
-  { key: 'total',     label: 'Всего ПУ',  field: 'total_pu',    type: 'num',  minWidth: 90,  sticky: false },
-  { key: 'active',    label: 'Активных',  sortField: 'activePct', minWidth: 150 },
-  { key: 'today',     label: 'ТО сегодня', sortField: 'todayPct', minWidth: 150 },
-  { key: 'prev',      label: 'ТО вчера',  sortField: 'prevPct',  minWidth: 150 },
-  { key: 'three',     label: 'ТО 3 дня',  sortField: 'threePct', minWidth: 150 },
-  { key: 'gap',       label: 'Разрыв',    field: 'gap_pct',    type: 'num',  minWidth: 72,  maxWidth: 90 },
-  { key: 'bs',        label: 'БС',        sortField: 'bsPct',    minWidth: 130 },
+  { key: 'partner',   label: 'Проект',    field: 'partner',     type: 'str',  minWidth: 130,
+    tip: 'Название проекта (партнёра), как оно задано в продакшен-базе.' },
+  { key: 'total',     label: 'Всего ПУ',  field: 'total_pu',    type: 'num',  minWidth: 90,  sticky: false,
+    tip: 'Все приборы учёта (ПУ) проекта — общее количество зарегистрированных устройств.' },
+  { key: 'active',    label: 'Активных',  sortField: 'activePct', minWidth: 150,
+    tip: 'ПУ с активностью за сегодня. Процент — доля от «Всего ПУ».' },
+  { key: 'today',     label: 'ТО сегодня', sortField: 'todayPct', minWidth: 150,
+    tip: 'Собранные суточные архивы показаний (Т0) за сегодняшнюю дату. Процент — доля от «Всего ПУ».' },
+  { key: 'prev',      label: 'ТО вчера',  sortField: 'prevPct',  minWidth: 150,
+    tip: 'Собранные суточные архивы показаний (Т0) за вчерашнюю дату. Процент — доля от «Всего ПУ».' },
+  { key: 'three',     label: 'ТО 3 дня',  sortField: 'threePct', minWidth: 150,
+    tip: 'Собранные суточные архивы показаний (Т0) за дату трёхдневной давности. Процент — доля от «Всего ПУ».' },
+  { key: 'gap',       label: 'Разрыв',    field: 'gap_pct',    type: 'num',  minWidth: 72,  maxWidth: 90,
+    tip: 'Доля активных ПУ, по которым за 3 дня НЕ собран архив Т0: 100% − (ТО 3 дня ÷ Активных). Меньше — лучше.' },
+  { key: 'bs',        label: 'БС',        sortField: 'bsPct',    minWidth: 130,
+    tip: 'Базовые станции: онлайн (были на связи в последний час) / всего. Процент — доступность БС.' },
+  { key: 'snapdt',    label: 'Срез БД',   field: 'snap_datetime', type: 'str', minWidth: 150,
+    tip: 'Дата и время среза (snap_datetime) из локальной базы данных — на этот момент приходятся все значения строки. Это НЕ время последнего обновления через API.' },
 ];
 
 function computeRowMetrics(row) {
@@ -268,34 +291,74 @@ function PartnerTable() {
                 onClick={() => toggleSort('partner')}
               >
                 Проект{sortCol === 'partner' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="Проект"
+                  text={COLUMNS.find(c => c.key === 'partner').tip}
+                />
               </th>
               <th style={{ ...thStyle, minWidth: 90, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('total')}>
                 Всего ПУ{sortCol === 'total' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="Всего ПУ"
+                  text={COLUMNS.find(c => c.key === 'total').tip}
+                />
               </th>
               <th style={{ ...thStyle, minWidth: 150, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('active')}>
                 Активных{sortCol === 'active' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="Активных"
+                  text={COLUMNS.find(c => c.key === 'active').tip}
+                />
               </th>
               <th style={{ ...thStyle, minWidth: 150, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('today')}>
                 ТО сегодня{sortCol === 'today' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="ТО сегодня"
+                  text={COLUMNS.find(c => c.key === 'today').tip}
+                />
               </th>
               <th style={{ ...thStyle, minWidth: 150, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('prev')}>
                 ТО вчера{sortCol === 'prev' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="ТО вчера"
+                  text={COLUMNS.find(c => c.key === 'prev').tip}
+                />
               </th>
               <th style={{ ...thStyle, minWidth: 150, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('three')}>
                 ТО 3 дня{sortCol === 'three' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="ТО 3 дня"
+                  text={COLUMNS.find(c => c.key === 'three').tip}
+                />
               </th>
               <th style={{ ...thStyle, minWidth: 72, maxWidth: 90, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('gap')}>
                 Разрыв{sortCol === 'gap' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="Разрыв"
+                  text={COLUMNS.find(c => c.key === 'gap').tip}
+                />
               </th>
               <th style={{ ...thStyle, minWidth: 130, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('bs')}>
                 БС{sortCol === 'bs' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="БС"
+                  text={COLUMNS.find(c => c.key === 'bs').tip}
+                />
+              </th>
+              <th style={{ ...thStyle, minWidth: 150, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => toggleSort('snapdt')}>
+                Срез БД{sortCol === 'snapdt' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="Срез БД"
+                  text={COLUMNS.find(c => c.key === 'snapdt').tip}
+                />
               </th>
             </tr>
           </thead>
@@ -303,7 +366,7 @@ function PartnerTable() {
           <tbody>
             {processed.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: 28, textAlign: 'center', color: 'var(--text-muted)' }}>
+                <td colSpan={9} style={{ padding: 28, textAlign: 'center', color: 'var(--text-muted)' }}>
                   Ничего не найдено
                 </td>
               </tr>

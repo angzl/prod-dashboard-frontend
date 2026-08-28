@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import InfoTip from './InfoTip';
 
 function colorTheme(value, good, medium) {
   if (value >= good)   return { cls: 'col-green',  accent: 'accent-green',  bar: 'bar-green',  hex: '#4ade80' };
@@ -72,6 +73,16 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     ? { cls: 'col-yellow', accent: 'accent-yellow', bar: 'bar-yellow', hex: '#fcd34d' }
     : { cls: 'col-red',    accent: 'accent-red',    bar: 'bar-red',    hex: '#f87171' };
 
+  // Подсказки «i» для карточек проекта
+  const TIPS = {
+    pu: 'Приборы учёта проекта: <b>Всего</b> — все зарегистрированные ПУ; <b>Активных</b> — ПУ с активностью за сегодня. Значения — на момент последнего среза из базы данных (время среза указано в заголовке карточки проекта).',
+    t0Today: 'Собранные суточные архивы показаний (Т0) за сегодняшнюю дату. «Охват» — доля от общего числа ПУ проекта.',
+    t0Prev: 'Собранные суточные архивы показаний (Т0) за вчерашнюю дату. «Охват» — доля от общего числа ПУ проекта.',
+    t0Three: 'Собранные суточные архивы показаний (Т0) за дату трёхдневной давности. «Охват» — доля от общего числа ПУ проекта.',
+    bs: 'Базовые станции проекта: <b>Онлайн</b> — были на связи в последний час перед срезом; <b>Всего</b> — все БС проекта. «Доступность» — доля онлайн от общего числа.',
+    gap: 'Разрыв между активными ПУ и собранными Т0 за 3 дня: 100% − (ТО 3 дня ÷ Активных). Показывает долю активных приборов, по которым архив не собран. До 5% — норма, до 15% — повышенный, выше — критичный.',
+  };
+
   // Карточка 1: Всего / Активных — крупная, объединённая
   // Карточки 2-5: ТО по дням
   // Карточка 6: БС объединённая
@@ -83,6 +94,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
       label:   'Приборы учёта',
       accent:  'accent-purple',
       wide:    true,
+      tip:     TIPS.pu,
       content: (
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
           {/* Всего */}
@@ -121,6 +133,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     {
       label:   'ТО сегодня',
       accent:  todayT.accent,
+      tip:     TIPS.t0Today,
       content: (
         <>
           <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', marginBottom: 6 }}>
@@ -141,6 +154,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     {
       label:   'ТО вчера',
       accent:  prevT.accent,
+      tip:     TIPS.t0Prev,
       content: (
         <>
           <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', marginBottom: 6 }}>
@@ -161,6 +175,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     {
       label:   'ТО за 3 дня',
       accent:  threeT.accent,
+      tip:     TIPS.t0Three,
       content: (
         <>
           <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', marginBottom: 6 }}>
@@ -181,6 +196,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     {
       label:   'Базовые станции',
       accent:  bsT.accent,
+      tip:     TIPS.bs,
       content: (
         <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
           {/* Онлайн */}
@@ -218,6 +234,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     {
       label:   'Разрыв акт→ТО-3',
       accent:  gapT.accent,
+      tip:     TIPS.gap,
       content: (
         <>
           <div style={{ fontSize: 32, fontWeight: 700, color: gapT.hex, lineHeight: 1, fontVariantNumeric: 'tabular-nums', marginBottom: 6 }}>
@@ -252,7 +269,10 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
           className={`proj-kpi-card ${card.accent} fade-in-up delay-${(idx % 6) + 1}`}
           style={card.wide ? { gridColumn: 'span 2' } : {}}
         >
-          <div className="pk-label">{card.label}</div>
+          <div className="pk-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+            <span>{card.label}</span>
+            {card.tip && <InfoTip title={card.label} text={card.tip} />}
+          </div>
           <div style={{ marginTop: 8 }}>
             {card.content}
           </div>

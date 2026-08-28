@@ -286,6 +286,9 @@ function AllProjectsTotalTable() {
                   onMouseLeave={() => setHoverCol(null)}
                 >
                   {col.label}
+                  {col.type === 'day' && col.time && (
+                    <span className="hist-time">{col.time}</span>
+                  )}
                 </th>
               );
             })}

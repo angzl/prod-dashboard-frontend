@@ -268,6 +268,22 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
       new Set(Object.values(grouped).flatMap(g => Object.keys(g)))
     ).sort();
     const cols = dates.map(d => ({ type: 'day', key: d, label: d.slice(5) }));
+
+    // Время последнего среза каждого дня (ЧЧ:ММ) — показываем под датой,
+    // чтобы было понятно, на какое время данные этого дня. Берём самое
+    // позднее время среза среди всех партнёров (срезы пишутся одновременно).
+    const dayTimes = {};
+    Object.values(grouped).forEach(g => {
+      Object.keys(g).forEach(day => {
+        const t = String(g[day]?.snap_datetime || '');
+        const hhmm = t.slice(11, 16);
+        if (/^\d{2}:\d{2}$/.test(hhmm) && (!dayTimes[day] || hhmm > dayTimes[day])) {
+          dayTimes[day] = hhmm;
+        }
+      });
+    });
+    cols.forEach(c => { if (dayTimes[c.key]) c.time = dayTimes[c.key]; });
+
     return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: rawRanges };
   }, [isTimeline, timeline, partners, days, getHistory, METRICS]);
 
@@ -577,6 +593,9 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
                   onMouseLeave={() => setHoverCol(null)}
                 >
                   {col.label}
+                  {col.type === 'day' && col.time && (
+                    <span className="hist-time">{col.time}</span>
+                  )}
                 </th>
               );
             })}
