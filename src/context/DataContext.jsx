@@ -20,6 +20,7 @@ const LS = {
   SNAPSHOT:      'dm_snapshot',
   HISTORY:       'dm_history',
   TIMELINE:      'dm_timeline',
+  MONITORED:     'dm_monitored',
   SETTINGS:      'dm_settings',
   LAST_OK:       'dm_last_ok',
   SERVER_LAST_OK:'dm_server_last_ok',
@@ -46,6 +47,9 @@ const initialState = {
   snapshot:  lsGet(LS.SNAPSHOT, []),
   history:   lsGet(LS.HISTORY,  {}),
   timeline:  lsGet(LS.TIMELINE, { columns: [], data: {}, ranges: {} }),
+  // monitored — [{name, priority}] с сервера; флаг «не приоритет»
+  // управляет видимостью проекта в сводках (скрыт за кнопкой «показать все»)
+  monitored: lsGet(LS.MONITORED, []),
   settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
   lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего полученного сообщения от сервера
   serverLastOk: lsGet(LS.SERVER_LAST_OK, null),  // last_ok с сервера (unix timestamp)
@@ -60,7 +64,7 @@ function reducer(state, action) {
 
     /** Пришло сообщение из SSE-стрима — полный снимок данных с сервера */
     case 'STREAM_OK': {
-      const { partners, snapshot, history, timeline, serverLastOk } = action.payload;
+      const { partners, snapshot, history, timeline, monitored, serverLastOk } = action.payload;
 
       // Если серверный last_ok не изменился и у нас уже есть данные —
       // это повторная отправка того же снимка (например, при переподключении
@@ -84,6 +88,7 @@ function reducer(state, action) {
       if (snapshot  !== undefined) lsSet(LS.SNAPSHOT,  snapshot);
       if (history   !== undefined) lsSet(LS.HISTORY,   history);
       if (timeline  !== undefined) lsSet(LS.TIMELINE,  timeline);
+      if (monitored !== undefined) lsSet(LS.MONITORED, monitored);
       lsSet(LS.LAST_OK, lastOk);
       if (serverLastOk !== undefined) lsSet(LS.SERVER_LAST_OK, serverLastOk);
 
@@ -93,6 +98,7 @@ function reducer(state, action) {
         snapshot:     snapshot     ?? state.snapshot,
         history:      history      ?? state.history,
         timeline:     timeline     ?? state.timeline,
+        monitored:    monitored    ?? state.monitored,
         lastOk,
         serverLastOk: serverLastOk ?? state.serverLastOk,
         status:       'ok',
@@ -110,7 +116,7 @@ function reducer(state, action) {
     }
 
     case 'CLEAR_CACHE': {
-      [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.TIMELINE, LS.LAST_OK, LS.SERVER_LAST_OK].forEach(k => {
+      [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.TIMELINE, LS.MONITORED, LS.LAST_OK, LS.SERVER_LAST_OK].forEach(k => {
         try { localStorage.removeItem(k); } catch {}
       });
       return {
@@ -119,6 +125,7 @@ function reducer(state, action) {
         snapshot: [],
         history: {},
         timeline: { columns: [], data: {}, ranges: {} },
+        monitored: [],
         lastOk: null,
         serverLastOk: null,
       };
@@ -147,6 +154,7 @@ export function DataProvider({ children }) {
         snapshot:     data.snapshot,
         history:      data.history,
         timeline:     data.timeline,
+        monitored:    data.monitored,
         serverLastOk: data.last_ok,
       },
     });
@@ -293,6 +301,17 @@ export function DataProvider({ children }) {
   const getHistory = (partner, days) =>
     state.history[`${partner}_${days}`] ?? null;
 
+  /* Карта приоритетов: {ownerName: bool}. true = приоритетный.
+   * Если проекта нет в monitored — считаем приоритетным (появится,
+   * когда бэкенд ещё старый и не шлёт поле monitored). */
+  const priorityMap = React.useMemo(() => {
+    const m = {};
+    (state.monitored || []).forEach(p => {
+      if (p && typeof p.name === 'string') m[p.name] = p.priority !== false;
+    });
+    return m;
+  }, [state.monitored]);
+
   const isApiOffline = (() => {
     if (state.status === 'ok') return false;
     if (!state.lastOk)         return state.status === 'error';
@@ -303,6 +322,7 @@ export function DataProvider({ children }) {
     ...state,
     isApiOffline,
     getHistory,
+    priorityMap,
     updateSettings,
     clearCache,
     refreshNow,

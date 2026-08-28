@@ -17,7 +17,7 @@ import './App.css';
 
 /* Тяжёлые графические компоненты (plotly.js ~3 МБ) грузим лениво.
    Они попадают в отдельный чанк и подгружаются только когда пользователь
-   открывает вкладки «Детализация», «Сравнение» или «Весь прод». Вкладка
+   открывает вкладки «Детализация» или «Весь прод». Вкладка
    «Сводка» (самая частая) грузится быстро, без plotly в начальном бандле. */
 const Graph       = lazy(() => import('./components/Graph'));
 const MultiGraph  = lazy(() => import('./components/MultiGraph'));
@@ -129,6 +129,9 @@ function AppInner() {
   const [selectedPartner, setSelectedPartner] = useState('');
   const [days,            setDays]            = useState(settings.historyDays);
   const [compareProjects, setCompareProjects] = useState([]);
+  // Режим внутри вкладки «Детализация»: один проект или сравнение
+  // нескольких. Отдельная вкладка «Сравнение» больше не нужна.
+  const [detailMode, setDetailMode] = useState('single');
 
   // Если selectedPartner ещё не выбран — берём первый из списка
   const partner = selectedPartner || partners[0] || '';
@@ -139,7 +142,6 @@ function AppInner() {
     { id: 'overview', label: '📋 Сводка'      },
     { id: 'total',    label: '🌐 Весь прод'   },
     { id: 'detail',   label: '📈 Детализация' },
-    { id: 'compare',  label: '📊 Сравнение'   },
     { id: 'admin',    label: '⚙️ Настройки'   },
   ];
 
@@ -223,15 +225,31 @@ function AppInner() {
       {/* ══ ДЕТАЛИЗАЦИЯ ═════════════════════════════════════ */}
       {activeTab === 'detail' && (
         <div className="tab-content">
-          {/* Фильтры */}
+          {/* Фильтры + переключатель режима (один проект / сравнение) */}
           <div className="card filters-card">
-            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              {detailMode === 'single' && (
               <div>
                 <span className="filter-label">Проект</span>
                 <select value={partner} onChange={e => setSelectedPartner(e.target.value)}>
                   {partners.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
+              )}
+              {detailMode === 'compare' && (
+              <div style={{ minWidth: 300 }}>
+                <span className="filter-label" style={{ display: 'block', marginBottom: 6 }}>Проекты для сравнения</span>
+                <Select
+                  isMulti
+                  options={partnerOptions}
+                  value={compareProjects}
+                  onChange={setCompareProjects}
+                  placeholder="Выберите проекты..."
+                  styles={selectStyles}
+                />
+              </div>
+              )}
               <div>
                 <span className="filter-label">Период (дней)</span>
                 <select value={days} onChange={e => setDays(Number(e.target.value))}>
@@ -240,11 +258,30 @@ function AppInner() {
                   ))}
                 </select>
               </div>
+              </div>
+
+              {/* Переключатель: один проект / сравнение */}
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <button
+                  onClick={() => setDetailMode('single')}
+                  className={detailMode === 'single' ? 'tab active' : 'tab'}
+                  style={{ padding: '6px 14px', fontSize: 12 }}
+                >
+                  📌 Один проект
+                </button>
+                <button
+                  onClick={() => setDetailMode('compare')}
+                  className={detailMode === 'compare' ? 'tab active' : 'tab'}
+                  style={{ padding: '6px 14px', fontSize: 12 }}
+                >
+                  📊 Сравнение
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Карточки проекта */}
-          {partner && (
+          {detailMode === 'single' && partner && (
             <div className="card">
               <div className="card-header">
                 <span style={{ marginRight: 6 }}>📌 {partner}</span>
@@ -262,20 +299,25 @@ function AppInner() {
           )}
 
           {/* История */}
-          <div className="section-title">
-            📊 Детальная история
-            <InfoTip
-              title="Детальная история"
-              text={'Тепловая таблица выбранного проекта за выбранный период: одна колонка — один день, берётся последний срез этого дня из базы данных (под датой указано время среза ЧЧ:ММ).\nПроценты под числами — доля от «Всего ПУ» (для БС — от «БС всего»). Цвет — положение значения между минимумом (красный) и максимумом (зелёный) за период; у «Разрыва» наоборот — меньше значит лучше.'}
+          {detailMode === 'single' && (
+            <>
+            <div className="section-title">
+              📊 Детальная история
+              <InfoTip
+                title="Детальная история"
+                text={'Тепловая таблица выбранного проекта за выбранный период: одна колонка — один день, берётся последний срез этого дня из базы данных (под датой указано время среза ЧЧ:ММ).\nПроценты под числами — доля от «Всего ПУ» (для БС — от «БС всего»). Цвет — положение значения между минимумом (красный) и максимумом (зелёный) за период; у «Разрыва» наоборот — меньше значит лучше.'}
+              />
+            </div>
+            <AllProjectsHistoryTable
+              key={`${partner}_${days}`}
+              partners={[partner]}
+              days={days}
             />
-          </div>
-          <AllProjectsHistoryTable
-            key={`${partner}_${days}`}
-            partners={[partner]}
-            days={days}
-          />
+            </>
+          )}
 
           {/* Графики — ленивая загрузка plotly.js */}
+          {detailMode === 'single' && (
           <div className="card">
             <div className="card-header">
               📈 Графики
@@ -290,44 +332,24 @@ function AppInner() {
               </Suspense>
             )}
           </div>
-        </div>
-      )}
+          )}
 
-      {/* ══ СРАВНЕНИЕ ═══════════════════════════════════════ */}
-      {activeTab === 'compare' && (
-        <div className="tab-content">
-          <div className="card">
-            <div className="card-header">
-              📊 Сравнение проектов
-              <InfoTip
-                title="Сравнение проектов"
-                text={'Наложение графиков выбранных проектов за выбранный период.\nСплошная линия — активные ПУ, пунктирная — собранные Т0 за 3 дня. Каждая точка — последний срез соответствующего дня из базы данных. Цвет линии соответствует проекту в легенде.'}
-              />
+          {/* Сравнение проектов — вспомогательный режим детализации
+              (перенесено из отдельной вкладки) */}
+          {detailMode === 'compare' && (
+            <div className="card">
+              <div className="card-header">
+                📊 Сравнение проектов
+                <InfoTip
+                  title="Сравнение проектов"
+                  text={'Наложение графиков выбранных проектов за выбранный период.\nСплошная линия — активные ПУ, пунктирная — собранные Т0 за 3 дня. Каждая точка — последний срез соответствующего дня из базы данных. Цвет линии соответствует проекту в легенде.'}
+                />
+              </div>
+              <Suspense fallback={<Skeleton height={480} text="Загрузка графиков..." />}>
+                <MultiGraph projects={compareProjects.map(p => p.value)} days={days} />
+              </Suspense>
             </div>
-            <div style={{ marginBottom: 16 }}>
-              <span className="filter-label" style={{ marginBottom: 6 }}>Выберите проекты</span>
-              <Select
-                isMulti
-                options={partnerOptions}
-                value={compareProjects}
-                onChange={setCompareProjects}
-                placeholder="Выберите проекты..."
-                styles={selectStyles}
-              />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <span className="filter-label">Период (дней)</span>
-              <select value={days} onChange={e => setDays(Number(e.target.value))} style={{ marginLeft: 8 }}>
-                {[7, 14, 30, 60, 90].map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-            {/* Графики — ленивая загрузка plotly.js */}
-            <Suspense fallback={<Skeleton height={480} text="Загрузка графиков..." />}>
-              <MultiGraph projects={compareProjects.map(p => p.value)} days={days} />
-            </Suspense>
-          </div>
+          )}
         </div>
       )}
 

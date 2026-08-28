@@ -207,8 +207,12 @@ function buildColumnGroups(columns) {
 }
 
 function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
-  const { getHistory, timeline, status } = useDataStore();
+  const { getHistory, timeline, status, priorityMap } = useDataStore();
   const [hoverCol, setHoverCol] = useState(null);
+  // Приоритет: в многопроектных таблицах (Сводка) неприоритетные проекты
+  // скрыты по умолчанию и раскрываются кнопкой. В детальном режиме
+  // (один проект на вкладке «Детализация») фильтр не нужен.
+  const [showLowPrio, setShowLowPrio] = useState(false);
 
   const winWidth   = useWindowWidth();
   const isMobile   = winWidth < 640;
@@ -225,8 +229,19 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
   const clampVal = (key, v) =>
     CLAMP_0_100[key] ? Math.max(0, Math.min(100, v)) : v;
 
-  const { columns, projectGrouped, projectList, rangesFromServer } = useMemo(() => {
-    const list = (partners || []).slice().sort();
+  const { columns, projectGrouped, projectList, rangesFromServer, hiddenCount } = useMemo(() => {
+    let list = (partners || []).slice().sort();
+
+    // Неприоритетные проекты скрываем только в обзорном режиме
+    // (несколько проектов). В детальном режиме список приходит
+    // намеренно из одного проекта — приоритет не фильтруем.
+    let hidden = 0;
+    const multi = (partners || []).length > 1;
+    if (multi && !showLowPrio) {
+      const before = list.length;
+      list = list.filter(p => priorityMap[p] !== false);
+      hidden = before - list.length;
+    }
 
     if (isTimeline) {
       const cols = (timeline?.columns || []).filter(Boolean);
@@ -238,7 +253,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
       // Фронт использует их для цветовой заливки, чтобы масштаб учитывал
       // все значения, из которых сформирован агрегат, а не только вывод.
       const ranges = timeline?.ranges || {};
-      return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: ranges };
+      return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: ranges, hiddenCount: hidden };
     }
 
     const allData = Object.fromEntries(
@@ -284,8 +299,8 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     });
     cols.forEach(c => { if (dayTimes[c.key]) c.time = dayTimes[c.key]; });
 
-    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: rawRanges };
-  }, [isTimeline, timeline, partners, days, getHistory, METRICS]);
+    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: rawRanges, hiddenCount: hidden };
+  }, [isTimeline, timeline, partners, days, getHistory, METRICS, showLowPrio, priorityMap]);
 
   const hasAnyData = isTimeline
     ? columns.length > 0 && projectList.some(p => {
@@ -510,6 +525,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
   };
 
   return (
+    <>
     <div
       className="hist-wrap"
       style={{
@@ -607,6 +623,28 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
         </tbody>
       </table>
     </div>
+
+    {/* Раскрытие неприоритетных проектов */}
+    {/* (кнопка под таблицей в обзорном режиме) */}
+    {hiddenCount > 0 && (
+      <div style={{ margin: '0 0 28px 0', display: 'flex', justifyContent: 'center' }}>
+        <button
+          onClick={() => setShowLowPrio(v => !v)}
+          style={{
+            padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            background: showLowPrio ? 'var(--surface2)' : 'rgba(99,102,241,0.15)',
+            border: `1px solid ${showLowPrio ? 'var(--border)' : 'rgba(99,102,241,0.4)'}`,
+            color: showLowPrio ? 'var(--text-muted)' : '#a5b4fc',
+            cursor: 'pointer', transition: 'all 0.15s',
+          }}
+        >
+          {showLowPrio
+            ? '▲ Скрыть неприоритетные проекты'
+            : `👁 Показать все проекты (+${hiddenCount})`}
+        </button>
+      </div>
+    )}
+    </>
   );
 }
 

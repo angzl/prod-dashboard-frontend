@@ -186,11 +186,12 @@ function computeRowMetrics(row) {
 const SORT_ICONS = { asc: ' ▲', desc: ' ▼', none: '' };
 
 function PartnerTable() {
-  const { snapshot: data, status } = useDataStore();
+  const { snapshot: data, status, priorityMap, monitored } = useDataStore();
 
-  const [search,   setSearch]   = useState('');
-  const [sortCol,  setSortCol]  = useState('partner');
-  const [sortDir,  setSortDir]  = useState('asc');
+  const [search,      setSearch]      = useState('');
+  const [sortCol,     setSortCol]     = useState('partner');
+  const [sortDir,     setSortDir]     = useState('asc');
+  const [showLowPrio, setShowLowPrio] = useState(false);  // показывать «не приоритет»
 
   const toggleSort = (colKey) => {
     if (sortCol === colKey) {
@@ -214,6 +215,14 @@ function PartnerTable() {
       );
     }
 
+    // Приоритет: по умолчанию показываем только приоритетные проекты.
+    // Неприоритетные («не приоритет» из админки) раскрываются кнопкой
+    // «Показать все проекты» под таблицей. При активном поиске фильтр
+    // не применяем — пользователь ищет конкретный проект.
+    if (!q && !showLowPrio) {
+      rows = rows.filter(({ row }) => priorityMap[row.partner] !== false);
+    }
+
     // Сортировка
     const col = COLUMNS.find(c => c.key === sortCol);
     if (col) {
@@ -234,7 +243,10 @@ function PartnerTable() {
       });
     }
     return rows;
-  }, [data, search, sortCol, sortDir]);
+  }, [data, search, sortCol, sortDir, showLowPrio, priorityMap]);
+
+  // Сколько неприоритетных проектов сейчас скрыто (для кнопки раскрытия)
+  const hiddenLowPrio = (monitored || []).filter(p => p && p.priority === false).length;
 
   if (status === 'loading' && data.length === 0)
     return <div className="state-msg">⏳ Загрузка таблицы...</div>;
@@ -271,6 +283,11 @@ function PartnerTable() {
         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
           Показано {processed.length} из {data.length}
         </span>
+        {hiddenLowPrio > 0 && (
+          <span style={{ fontSize: 12, color: '#fcd34d' }}>
+            · {hiddenLowPrio} без приоритета скрыто
+          </span>
+        )}
       </div>
 
       <div style={{
@@ -381,6 +398,26 @@ function PartnerTable() {
           </tbody>
         </table>
       </div>
+
+      {/* Раскрытие неприоритетных проектов */}
+      {hiddenLowPrio > 0 && (
+        <div style={{ margin: '0 24px 28px 24px', display: 'flex', justifyContent: 'center' }}>
+          <button
+            onClick={() => setShowLowPrio(v => !v)}
+            style={{
+              padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+              background: showLowPrio ? 'var(--surface2)' : 'rgba(99,102,241,0.15)',
+              border: `1px solid ${showLowPrio ? 'var(--border)' : 'rgba(99,102,241,0.4)'}`,
+              color: showLowPrio ? 'var(--text-muted)' : '#a5b4fc',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            {showLowPrio
+              ? '▲ Скрыть неприоритетные проекты'
+              : `👁 Показать все проекты (+${hiddenLowPrio})`}
+          </button>
+        </div>
+      )}
     </>
   );
 }

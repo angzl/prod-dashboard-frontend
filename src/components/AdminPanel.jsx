@@ -192,6 +192,261 @@ function ApiStatusBadge({ status, lastOk, isOffline }) {
   );
 }
 
+/* ── Управление проектами мониторинга (два блока) ────────────
+ *
+ * Левый блок  — ВСЕ овнеры из продакшен-БД (кроме уже добавленных);
+ *               кнопка «Обновить из БД» перечитывает список овнеров.
+ * Правый блок — проекты, находящиеся в мониторинге. У каждого два
+ *               элемента управления:
+ *                 • флажок «не приоритет» (такие проекты скрыты на
+ *                   дашборде за кнопкой «Показать все проекты»);
+ *                 • кнопка удаления из мониторинга.
+ * Внизу — «Сохранить»: список уходит в monitored_projects.json,
+ * сервер сразу снимает срез новых проектов и пушит данные по SSE.
+ */
+function MonitoredProjectsSection() {
+  const apiBase = import.meta.env.VITE_API_URL || '';
+  const { refreshNow } = useDataStore();
+
+  const [owners, setOwners]         = useState([]);        // все овнеры из БД
+  const [monitored, setMonitored]   = useState([]);        // [{name, priority}]
+  const [search, setSearch]         = useState('');
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [dirty, setDirty]           = useState(false);
+  const [msg, setMsg]               = useState(null);
+
+  const pin = () => sessionStorage.getItem('dm_admin_auth_pin') || '';
+
+  const loadData = async (refreshOwners = false) => {
+    setLoading(true);
+    try {
+      const [ownersRes, monRes] = await Promise.all([
+        fetch(`${apiBase}/api/admin/owners?pin=${pin()}${refreshOwners ? '&refresh=true' : ''}`),
+        fetch(`${apiBase}/api/admin/monitored?pin=${pin()}`),
+      ]);
+      const ownersData = await ownersRes.json();
+      const monData    = await monRes.json();
+      setOwners(ownersData.owners || []);
+      setMonitored((monData.projects || []).map(p => ({
+        name: p.name, priority: p.priority !== false,
+      })));
+      setDirty(false);
+    } catch {
+      setMsg({ type: 'error', text: 'Не удалось загрузить список проектов' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadData(false); /* eslint-disable-line */ }, []);
+
+  const monitoredNames = new Set(monitored.map(p => p.name));
+  const available = owners.filter(o => !monitoredNames.has(o));
+
+  const q = search.trim().toLowerCase();
+  const filteredAvailable = q ? available.filter(o => o.toLowerCase().includes(q)) : available;
+
+  const addToMonitored = (name) => {
+    setMonitored(m => [...m, { name, priority: true }]);
+    setDirty(true);
+  };
+
+  const removeFromMonitored = (name) => {
+    setMonitored(m => m.filter(p => p.name !== name));
+    setDirty(true);
+  };
+
+  const togglePriority = (name) => {
+    setMonitored(m => m.map(p => p.name === name ? { ...p, priority: !p.priority } : p));
+    setDirty(true);
+  };
+
+  const save = async () => {
+    if (monitored.length === 0) {
+      if (!confirm('Список мониторинга пуст — сохранить пустым?')) return;
+    }
+    setSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`${apiBase}/api/admin/monitored?pin=${pin()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projects: monitored }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setDirty(false);
+      setMsg({ type: 'ok', text: '✅ Сохранено. Срез новых проектов снимается, данные появятся через несколько секунд.' });
+      // Подтянуть обновлённый список партнёров в общий стор
+      setTimeout(() => refreshNow(), 1500);
+    } catch (e) {
+      setMsg({ type: 'error', text: `Ошибка сохранения: ${e.message}` });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const boxStyle = {
+    background: 'var(--surface2)', border: '1px solid var(--border)',
+    borderRadius: 10, padding: 12, minHeight: 260, maxHeight: 420,
+    overflowY: 'auto', flex: '1 1 280px',
+  };
+  const listRowStyle = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    gap: 8, padding: '7px 10px', borderRadius: 7,
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    marginBottom: 6, fontSize: 13,
+  };
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 4 }}>
+        Проекты в мониторинге
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+        Слева — все овнеры из продакшен-БД, справа — проекты мониторинга.
+        Флажок «не приоритет» скрывает проект в сводках за кнопкой «Показать все проекты».
+        Мониторинг всех проектов (срез в локальную БД) выполняется каждые 3 часа.
+      </div>
+
+      {/* Панель поиска + обновления овнеров */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+        <input
+          type="text"
+          placeholder="🔍 Поиск овнера..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            flex: '1 1 220px', padding: '7px 12px', borderRadius: 8,
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            color: 'var(--text)', fontSize: 13, outline: 'none', fontFamily: 'inherit',
+          }}
+        />
+        <button
+          onClick={() => loadData(true)}
+          disabled={loading}
+          style={{
+            padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            color: 'var(--text-muted)', cursor: 'pointer',
+          }}
+        >
+          {loading ? '⏳ Загрузка...' : '🔄 Обновить список из БД'}
+        </button>
+      </div>
+
+      {/* Два блока */}
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        {/* Левый: доступные */}
+        <div style={boxStyle}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
+            📦 Доступные овнеры ({filteredAvailable.length})
+          </div>
+          {filteredAvailable.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>
+              Нет доступных проектов
+            </div>
+          )}
+          {filteredAvailable.map(name => (
+            <div key={name} style={listRowStyle}>
+              <span style={{ color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {name}
+              </span>
+              <button
+                onClick={() => addToMonitored(name)}
+                title="Добавить в мониторинг"
+                style={{
+                  padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  background: 'rgba(99,102,241,0.2)', border: '1px solid rgba(99,102,241,0.4)',
+                  color: '#a5b4fc', cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                ➕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Правый: в мониторинге */}
+        <div style={boxStyle}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
+            📡 В мониторинге ({monitored.length})
+          </div>
+          {monitored.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 20 }}>
+              Добавьте проекты из левого блока
+            </div>
+          )}
+          {monitored.map(p => (
+            <div key={p.name} style={listRowStyle}>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                overflow: 'hidden', flex: 1, userSelect: 'none',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={p.priority}
+                  onChange={() => togglePriority(p.name)}
+                  title={p.priority ? 'Приоритетный (виден сразу)' : '«Не приоритет» — скрыт за кнопкой «Показать все»'}
+                  style={{ accentColor: '#6366f1', width: 15, height: 15, flexShrink: 0 }}
+                />
+                <span style={{
+                  color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap', fontWeight: p.priority ? 600 : 400,
+                  fontStyle: p.priority ? 'normal' : 'italic',
+                }}>
+                  {p.name}
+                </span>
+                {!p.priority && (
+                  <span style={{ fontSize: 10, color: '#fcd34d', flexShrink: 0 }} title="Не приоритет">
+                    ○ не приоритет
+                  </span>
+                )}
+              </label>
+              <button
+                onClick={() => removeFromMonitored(p.name)}
+                title="Убрать из мониторинга"
+                style={{
+                  padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                  background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.35)',
+                  color: '#f87171', cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Сохранение */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
+        <button
+          onClick={save}
+          disabled={saving || loading || !dirty}
+          style={{
+            padding: '8px 22px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+            background: dirty && !saving ? 'rgba(99,102,241,0.25)' : 'var(--surface2)',
+            border: `1px solid ${dirty && !saving ? 'var(--accent)' : 'var(--border)'}`,
+            color: dirty && !saving ? '#a5b4fc' : 'var(--text-muted)',
+            cursor: dirty && !saving ? 'pointer' : 'default',
+          }}
+        >
+          {saving ? '⏳ Сохранение и срез данных...' : '💾 Сохранить'}
+        </button>
+        {dirty && (
+          <span style={{ fontSize: 12, color: '#fcd34d' }}>● Есть несохранённые изменения</span>
+        )}
+        {msg && (
+          <span style={{ fontSize: 12, color: msg.type === 'ok' ? '#4ade80' : '#f87171' }}>
+            {msg.text}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── Основная панель ──────────────────────────────────────── */
 function AdminPanelContent() {
   const {
@@ -292,6 +547,9 @@ function AdminPanelContent() {
           />
         </SettingRow>
       </div>
+
+      {/* Секция: Проекты мониторинга (два блока) */}
+      <MonitoredProjectsSection />
 
       {/* Секция: Действия */}
       <div style={{ marginBottom: 28 }}>
