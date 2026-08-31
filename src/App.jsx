@@ -152,7 +152,10 @@ function AppInner() {
 
       {/* Шапка */}
       <div className="page-header">
-        <h1>📊 Prod Monitoring Dashboard</h1>
+        <h1>
+          <img src="/ico.png" alt="logo" style={{ height: 30, width: 30, verticalAlign: 'middle', marginRight: 10, borderRadius: 6, objectFit: 'contain' }} />
+          Мониторинг прод v_3.7
+        </h1>
         <SnapshotTimeBadge />
         <HeaderStatus />
       </div>
