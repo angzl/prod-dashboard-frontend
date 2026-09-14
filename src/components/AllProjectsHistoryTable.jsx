@@ -249,11 +249,13 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
       list.forEach(partner => {
         grouped[partner] = timeline?.data?.[partner] || {};
       });
-      // Глобальные диапазоны по всем сырым срезам — отдаёт бэкенд.
-      // Фронт использует их для цветовой заливки, чтобы масштаб учитывал
-      // все значения, из которых сформирован агрегат, а не только вывод.
-      const ranges = timeline?.ranges || {};
-      return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: ranges, hiddenCount: hidden };
+      // ВАЖНО: диапазоны с бэкенда (timeline.ranges) — это min/max по СЫРЫМ
+      // срезам, а в таблице показываются агрегаты (MAX за год/месяц, последний
+      // срез дня). MAX-агрегат по построению всегда у верхней границы сырого
+      // диапазона, поэтому при заливке по сырым диапазонам ВСЕ ячейки
+      // получались зелёными. Диапазон заливки считаем по отображаемым
+      // значениям (см. rowRanges ниже) — как в таблице «Весь прод».
+      return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null, hiddenCount: hidden };
     }
 
     const allData = Object.fromEntries(
@@ -261,24 +263,10 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     );
     const grouped = buildDailyGrouped(allData);
 
-    // В режиме detail тоже считаем ranges по всем сырым срезам,
-    // а не только по последнему срезу дня, который попадает в таблицу.
-    const rawRanges = {};
-    list.forEach(partner => {
-      rawRanges[partner] = {};
-      const rows = allData[partner] || [];
-      METRICS.forEach(m => {
-        if (m.noBg) return;
-        const vals = rows
-          .map(r => clampVal(m.key, parseNum(r[m.key])))
-          .filter(v => !isNaN(v));
-        rawRanges[partner][m.key] = {
-          min: vals.length ? Math.min(...vals) : 0,
-          max: vals.length ? Math.max(...vals) : 0,
-        };
-      });
-    });
-
+    // Диапазон заливки считаем по ОТОБРАЖАЕМЫМ значениям (последний срез
+    // каждого дня) — см. rowRanges ниже. Раньше здесь считались min/max по
+    // всем сырым срезам дня, из-за чего последний срез (обычно максимум дня)
+    // всегда попадал у верхней границы диапазона и вся таблица зеленела.
     const dates = Array.from(
       new Set(Object.values(grouped).flatMap(g => Object.keys(g)))
     ).sort();
@@ -299,7 +287,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     });
     cols.forEach(c => { if (dayTimes[c.key]) c.time = dayTimes[c.key]; });
 
-    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: rawRanges, hiddenCount: hidden };
+    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null, hiddenCount: hidden };
   }, [isTimeline, timeline, partners, days, getHistory, METRICS, showLowPrio, priorityMap]);
 
   const hasAnyData = isTimeline

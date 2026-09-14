@@ -5,7 +5,7 @@ import { useDataStore } from '../context/DataContext';
 /* TotalGraphs — графики «Весь прод» с детализацией.
    Все графики строятся из state.history (агрегация на фронте),
    без отдельных запросов к бэкенду — работает в рамках SSE push-модели.
-   Берём максимальный доступный период (90 дней). */
+   Берём максимальный доступный период (365 дней). */
 
 const PALETTE = [
   '#6366f1', '#14b8a6', '#f59e0b', '#ef4444', '#8b5cf6',
@@ -78,7 +78,7 @@ function buildDailyHistory(rawHistory) {
 function TotalGraphs() {
   const { partners, getHistory, status } = useDataStore();
 
-  const days = 90;
+  const days = 365;
 
   const perPartner = useMemo(() => {
     if (!partners || partners.length === 0) return {};

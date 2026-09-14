@@ -216,7 +216,7 @@ function AppInner() {
             📈 Детализация с графиками
             <InfoTip
               title="Детализация с графиками"
-              text={'Динамика суммарных показателей за 90 дней. Каждая точка — последний срез дня из БД.'}
+              text={'Динамика суммарных показателей за выбранный период (до 365 дней). Каждая точка — последний срез дня из БД.'}
             />
           </div>
           <Suspense fallback={<Skeleton height={400} text="Загрузка графиков..." />}>
@@ -256,7 +256,7 @@ function AppInner() {
               <div>
                 <span className="filter-label">Период (дней)</span>
                 <select value={days} onChange={e => setDays(Number(e.target.value))}>
-                  {[7, 14, 30, 60, 90].map(d => (
+                  {[7, 14, 30, 60, 90, 180, 365].map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
