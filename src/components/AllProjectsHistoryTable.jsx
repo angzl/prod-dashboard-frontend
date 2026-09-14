@@ -57,6 +57,41 @@ function getCellStyle(value, rowMin, rowMax, invert = false) {
   };
 }
 
+/**
+ * Устойчивый диапазон (P5/P95) по всем сырым значениям метрики.
+ *
+ * Чистые min/max портит один-единственный выброс: например, в первый
+ * день мониторинга срез может быть неполным (значение аномально низкое),
+ * и тогда min становится этим выбросом, а все нормальные значения
+ * попадают у верхней границы диапазона → вся строка заливается зелёным.
+ *
+ * Перцентили P5/P95 тоже считаются по ВСЕМ сырым значениям (как и хотел
+ * дизайнер), но обрезают 5% хвостов с каждой стороны — масштаб заливки
+ * отражает реальный разброс, а не аномалии.
+ *
+ * Если данных слишком мало или они константны (P5==P95) — откатываемся
+ * к чистым min/max; если и они совпадают — отдаём {0,0}, что приводит
+ * к отсутствию заливки (ячейка рисуется без цвета).
+ */
+function robustRange(vals) {
+  const s = (vals || []).filter(v => !isNaN(v)).slice().sort((a, b) => a - b);
+  if (!s.length) return { min: 0, max: 0 };
+  const q = (p) => {
+    const k = (s.length - 1) * p;
+    const f = Math.floor(k);
+    if (f + 1 < s.length) return s[f] + (s[f + 1] - s[f]) * (k - f);
+    return s[f];
+  };
+  let lo = q(0.05);
+  let hi = q(0.95);
+  if (lo === hi) {
+    lo = s[0];
+    hi = s[s.length - 1];
+    if (lo === hi) return { min: 0, max: 0 };
+  }
+  return { min: lo, max: hi };
+}
+
 /* Минимальный набор метрик для timeline-режима (Сводка / Весь прод):
    только активные, ТО 3 дня и БС. */
 const METRICS_TIMELINE = [
@@ -229,7 +264,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
   const clampVal = (key, v) =>
     CLAMP_0_100[key] ? Math.max(0, Math.min(100, v)) : v;
 
-  const { columns, projectGrouped, projectList, rangesFromServer, hiddenCount } = useMemo(() => {
+  const { columns, projectGrouped, projectList, rangesFromServer, rawRowsByPartner, hiddenCount } = useMemo(() => {
     let list = (partners || []).slice().sort();
 
     // Неприоритетные проекты скрываем только в обзорном режиме
@@ -249,13 +284,14 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
       list.forEach(partner => {
         grouped[partner] = timeline?.data?.[partner] || {};
       });
-      // ВАЖНО: диапазоны с бэкенда (timeline.ranges) — это min/max по СЫРЫМ
-      // срезам, а в таблице показываются агрегаты (MAX за год/месяц, последний
-      // срез дня). MAX-агрегат по построению всегда у верхней границы сырого
-      // диапазона, поэтому при заливке по сырым диапазонам ВСЕ ячейки
-      // получались зелёными. Диапазон заливки считаем по отображаемым
-      // значениям (см. rowRanges ниже) — как в таблице «Весь прод».
-      return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null, hiddenCount: hidden };
+      // Диапазоны для заливки — с бэкенда (timeline.ranges): они считаются
+      // по ВСЕМ сырым срезам каждого партнёра (timeline.py::_compute_ranges),
+      // а не по агрегированным значениям, которые показаны в таблице.
+      // С 2026-09 бэкенд отдаёт устойчивые границы P5/P95 (см. _compute_ranges),
+      // чтобы один выброс (например, неполный срез в первый день мониторинга)
+      // не утащил весь масштаб вниз и не залил строку зелёным.
+      const ranges = timeline?.ranges || {};
+      return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: ranges, rawRowsByPartner: null, hiddenCount: hidden };
     }
 
     const allData = Object.fromEntries(
@@ -263,10 +299,6 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     );
     const grouped = buildDailyGrouped(allData);
 
-    // Диапазон заливки считаем по ОТОБРАЖАЕМЫМ значениям (последний срез
-    // каждого дня) — см. rowRanges ниже. Раньше здесь считались min/max по
-    // всем сырым срезам дня, из-за чего последний срез (обычно максимум дня)
-    // всегда попадал у верхней границы диапазона и вся таблица зеленела.
     const dates = Array.from(
       new Set(Object.values(grouped).flatMap(g => Object.keys(g)))
     ).sort();
@@ -287,7 +319,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     });
     cols.forEach(c => { if (dayTimes[c.key]) c.time = dayTimes[c.key]; });
 
-    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null, hiddenCount: hidden };
+    return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null, rawRowsByPartner: allData, hiddenCount: hidden };
   }, [isTimeline, timeline, partners, days, getHistory, METRICS, showLowPrio, priorityMap]);
 
   const hasAnyData = isTimeline
@@ -320,22 +352,19 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
           ranges[partner][m.key] = { min: srv.min, max: srv.max };
           return;
         }
-        const grouped = projectGrouped[partner];
-        const vals = columns
-          .map(col => {
-            const row = grouped[col.key];
-            if (!row) return NaN;
-            return clampVal(m.key, parseNum(row[m.key]));
-          })
+        // В detail-режиме считаем диапазон по ВСЕМ сырым срезам периода
+        // (а не только по последнему срезу каждого дня, который показан).
+        // Применяем robustRange (P5/P95), чтобы один выброс не утянул
+        // масштаб вниз и не залил всю строку зелёным.
+        const rows = rawRowsByPartner?.[partner] || [];
+        const vals = rows
+          .map(r => clampVal(m.key, parseNum(r[m.key])))
           .filter(v => !isNaN(v));
-        ranges[partner][m.key] = {
-          min: vals.length ? Math.min(...vals) : 0,
-          max: vals.length ? Math.max(...vals) : 0,
-        };
+        ranges[partner][m.key] = robustRange(vals);
       });
     });
     return ranges;
-  }, [projectList, columns, projectGrouped, rangesFromServer, METRICS]);
+  }, [projectList, rangesFromServer, rawRowsByPartner, METRICS]);
 
   const stickyProj = {
     position: 'sticky', left: 0, zIndex: 12,
