@@ -34,14 +34,20 @@ function Sparkline({ values, color }) {
 /* memo + useMemo: раньше карточки пересчитывали все метрики при любом
    ре-рендере родителя. Теперь пересчёт только при смене projectData. */
 const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData, partner }) {
-  if (!projectData) {
-    return <div className="state-msg">⚠️ Нет данных для проекта <strong>{partner}</strong></div>;
-  }
-
+  /* Хук должен вызываться безусловно (rules-of-hooks): раньше здесь был
+   * ранний return при отсутствии данных, из-за чего число хуков менялось
+   * между рендерами и React падал с ошибкой #310. */
   const {
     total, active, t0Today, t0Prev, t0Three, bsOn, bsTotal, gap,
     activePct, todayPct, prevPct, threePct, bsPct,
   } = useMemo(() => {
+    if (!projectData) {
+      return {
+        total: 0, active: 0, t0Today: 0, t0Prev: 0, t0Three: 0,
+        bsOn: 0, bsTotal: 0, gap: 0,
+        activePct: 0, todayPct: 0, prevPct: 0, threePct: 0, bsPct: 0,
+      };
+    }
     const total   = parseInt(projectData.total_pu)  || 0;
     const active  = parseInt(projectData.pu_active) || 0;
     const t0Today = parseInt(projectData.today)     || 0;
@@ -59,6 +65,11 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
       bsPct:     bsTotal > 0 ? (bsOn    / bsTotal) * 100 : 0,
     };
   }, [projectData]);
+
+  // Ветка «нет данных» — уже ПОСЛЕ всех хуков (см. комментарий выше)
+  if (!projectData) {
+    return <div className="state-msg">⚠️ Нет данных для проекта <strong>{partner}</strong></div>;
+  }
 
   const fmt = (n) => Number(n).toLocaleString('ru-RU');
 

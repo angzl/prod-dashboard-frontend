@@ -329,18 +329,14 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
       })
     : Object.values(projectGrouped).some(g => Object.keys(g).length > 0);
 
-  if (!hasAnyData) {
-    if (status === 'loading')
-      return <div className="state-msg">⏳ Загрузка истории...</div>;
-    return <div className="state-msg">Нет исторических данных в кеше</div>;
-  }
-
   const columnGroups = isTimeline ? buildColumnGroups(columns) : [];
   const multiProject = projectList.length > 1;
 
   // Раньше этот цикл по всем партнёрам × метрикам выполнялся при КАЖДОМ
   // рендере (включая hover-движения мыши). Теперь — мемоизирован и
   // пересчитывается только при смене самих данных.
+  // ВАЖНО: useMemo вызывается до ветки раннего return — иначе число хуков
+  // меняется между рендерами и React падает с ошибкой #310 (rules-of-hooks).
   const rowRanges = useMemo(() => {
     const ranges = {};
     projectList.forEach(partner => {
@@ -365,6 +361,13 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     });
     return ranges;
   }, [projectList, rangesFromServer, rawRowsByPartner, METRICS]);
+
+  // Ветка «нет данных» — уже ПОСЛЕ всех хуков
+  if (!hasAnyData) {
+    if (status === 'loading')
+      return <div className="state-msg">⏳ Загрузка истории...</div>;
+    return <div className="state-msg">Нет исторических данных в кеше</div>;
+  }
 
   const stickyProj = {
     position: 'sticky', left: 0, zIndex: 12,

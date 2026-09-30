@@ -7,13 +7,22 @@ import { fmtSnapDt, getLatestSnapDt } from '../utils/datetime';
 /* memo предотвращает ре-рендер карточек, если snapshot/partners не изменились.
    Раньше каждый апдейт стора (даже unrelated) перерисовывал KPI-карточки. */
 const MetricCards = React.memo(function MetricCards({ partners, snapshot }) {
-  if (!snapshot || snapshot.length === 0) return null;
+  /* Хуки ниже вызываются безусловно (rules-of-hooks): раньше здесь был
+   * ранний return при отсутствии snapshot, из-за чего число хуков менялось
+   * между рендерами и React падал с ошибкой #310. Ветка «нет данных»
+   * перенесена после хуков. */
+  const hasData = !!(snapshot && snapshot.length > 0);
 
   // Мемоизируем агрегаты — пересчёт только при изменении snapshot.
   const {
     totalPU, totalActive, totalBSOnline, totalBSTotal,
     totalT0Today, todayPct, maxGap, maxGapPartner, activePct, bsPct,
   } = useMemo(() => {
+    if (!snapshot || snapshot.length === 0) {
+      return { totalPU: 0, totalActive: 0, totalBSOnline: 0, totalBSTotal: 0,
+               totalT0Today: 0, todayPct: 0, maxGap: 0, maxGapPartner: '',
+               activePct: 0, bsPct: 0 };
+    }
     let totalPU = 0, totalActive = 0, totalBSOnline = 0, totalBSTotal = 0, totalT0Today = 0;
     let maxGap = 0, maxGapPartner = '';
     snapshot.forEach(row => {
@@ -42,6 +51,9 @@ const MetricCards = React.memo(function MetricCards({ partners, snapshot }) {
   const animPU     = useCountUp(totalPU);
   const animActive = useCountUp(totalActive);
   const animBSOn   = useCountUp(totalBSOnline);
+
+  // Ветка «нет данных» — уже ПОСЛЕ всех хуков (см. комментарий выше)
+  if (!hasData) return null;
 
   const fmt = (n) => Number(n).toLocaleString('ru-RU');
 
