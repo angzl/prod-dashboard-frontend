@@ -1,30 +1,37 @@
 /**
  * DataContext — фронтовый стор.
  *
- * Стратегия (push-модель, без polling):
- *   1. При старте читаем данные из localStorage (мгновенно показываем)
+ * Стратегия «тонкий клиент» (push-модель, без polling, БЕЗ кеша браузера):
+ *   1. Источник истины — ТОЛЬКО сервер: при старте показываем скелетоны,
+ *      первое же SSE-сообщение приносит полный свежий снимок данных
  *   2. Открываем ОДНО SSE-соединение (/api/stream) на всё время работы страницы
  *   3. Сервер САМ присылает новые данные, как только его внутренний кеш
  *      обновился (раз в interval_seconds на бэкенде) — никаких повторных
  *      HTTP-запросов с фронта не требуется, независимо от числа открытых вкладок
  *   4. При разрыве соединения браузер (EventSource) автоматически переподключается
+ *
+ * Данные НЕ сохраняются в localStorage: у всех пользователей всегда одна и
+ * та же (свежая) картина с сервера, а на слабых ПК нет фризов от
+ * многомегабайтных JSON.parse/JSON.stringify на главном потоке браузера.
+ * В localStorage остаются только персональные UI-настройки.
  */
 import React, {
   createContext, useContext, useEffect,
   useRef, useCallback, useReducer,
 } from 'react';
 
-/* ── localStorage ──────────────────────────────────────────── */
+/* ── localStorage: ТОЛЬКО персональные UI-настройки ─────────── */
 const LS = {
-  PARTNERS:      'dm_partners',
-  SNAPSHOT:      'dm_snapshot',
-  HISTORY:       'dm_history',
-  TIMELINE:      'dm_timeline',
-  MONITORED:     'dm_monitored',
-  SETTINGS:      'dm_settings',
-  LAST_OK:       'dm_last_ok',
-  SERVER_LAST_OK:'dm_server_last_ok',
+  SETTINGS: 'dm_settings',
 };
+
+/* Ключи браузерного кеша старой версии (данные кешировались в браузере
+ * у каждого пользователя). Один раз удаляем их при загрузке страницы,
+ * чтобы у пользователей не лежали устаревшие мегабайты. */
+const LEGACY_LS_KEYS = [
+  'dm_partners', 'dm_snapshot', 'dm_history', 'dm_timeline',
+  'dm_monitored', 'dm_last_ok', 'dm_server_last_ok',
+];
 
 const DEFAULT_SETTINGS = {
   historyDays:     30,
@@ -42,18 +49,20 @@ function lsSet(key, value) {
 }
 
 /* ── Reducer ───────────────────────────────────────────────── */
+/* Данные всегда начинаются пустыми — их принесёт первое сообщение
+ * от сервера (SSE или HTTP-fallback GET /api/all). Локального кеша нет. */
 const initialState = {
-  partners:  lsGet(LS.PARTNERS, []),
-  snapshot:  lsGet(LS.SNAPSHOT, []),
-  history:   lsGet(LS.HISTORY,  {}),
-  timeline:  lsGet(LS.TIMELINE, { columns: [], data: {}, ranges: {} }),
+  partners:  [],
+  snapshot:  [],
+  history:   {},
+  timeline:  { columns: [], data: {}, ranges: {} },
   // monitored — [{name, priority}] с сервера; флаг «не приоритет»
   // управляет видимостью проекта в сводках (скрыт за кнопкой «показать все»)
-  monitored: lsGet(LS.MONITORED, []),
+  monitored: [],
   settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
-  lastOk:    lsGet(LS.LAST_OK,  null),  // ISO — момент последнего полученного сообщения от сервера
-  serverLastOk: lsGet(LS.SERVER_LAST_OK, null),  // last_ok с сервера (unix timestamp)
-  status:    'idle',   // idle | loading | ok | error
+  lastOk:    null,      // ISO — момент последнего полученного сообщения от сервера
+  serverLastOk: null,   // last_ok с сервера (unix timestamp)
+  status:    'loading', // idle | loading | ok | error
   errorMsg:  null,
 };
 
@@ -84,13 +93,8 @@ function reducer(state, action) {
 
       const lastOk = new Date().toISOString();
 
-      if (partners !== undefined) lsSet(LS.PARTNERS, partners);
-      if (snapshot  !== undefined) lsSet(LS.SNAPSHOT,  snapshot);
-      if (history   !== undefined) lsSet(LS.HISTORY,   history);
-      if (timeline  !== undefined) lsSet(LS.TIMELINE,  timeline);
-      if (monitored !== undefined) lsSet(LS.MONITORED, monitored);
-      lsSet(LS.LAST_OK, lastOk);
-      if (serverLastOk !== undefined) lsSet(LS.SERVER_LAST_OK, serverLastOk);
+      // В localStorage данные больше не пишем — единственный источник
+      // истины сервер; здесь только обновляем состояние в памяти.
 
       return {
         ...state,
@@ -116,9 +120,8 @@ function reducer(state, action) {
     }
 
     case 'CLEAR_CACHE': {
-      [LS.PARTNERS, LS.SNAPSHOT, LS.HISTORY, LS.TIMELINE, LS.MONITORED, LS.LAST_OK, LS.SERVER_LAST_OK].forEach(k => {
-        try { localStorage.removeItem(k); } catch {}
-      });
+      // Локального кеша больше нет — очищаем только состояние в памяти,
+      // свежие данные придут с сервера (refreshNow) на следующем цикле.
       return {
         ...state,
         partners: [],
@@ -143,6 +146,23 @@ export function DataProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const esRef        = useRef(null);
   const reconnectRef  = useRef(null);
+
+  /* Есть ли уже данные с сервера — чтобы при переподключениях SSE
+   * не мигать скелетонами, когда данные уже на экране. */
+  const hasDataRef = useRef(false);
+  useEffect(() => {
+    hasDataRef.current =
+      (state.partners?.length || 0) + (state.snapshot?.length || 0) > 0;
+  }, [state.partners, state.snapshot]);
+
+  /* Одноразовая чистка браузерного кеша старой версии: раньше данные
+   * сохранялись в localStorage у каждого пользователя (мегабайты) —
+   * теперь источник истины только сервер, старые ключи удаляем. */
+  useEffect(() => {
+    LEGACY_LS_KEYS.forEach(k => {
+      try { localStorage.removeItem(k); } catch {}
+    });
+  }, []);
 
   /* ── Применить полный снимок данных с сервера (SSE или HTTP) ── */
   const applyServerPayload = useCallback((data) => {
@@ -180,7 +200,7 @@ export function DataProvider({ children }) {
       if (!res.ok) return;
       applyServerPayload(await res.json());
     } catch {
-      // Сервер недоступен — останемся на локальном кеше
+      // Сервер недоступен — остаёмся на последних полученных данных
     }
   }, [apiBase, applyServerPayload]);
 
@@ -191,12 +211,9 @@ export function DataProvider({ children }) {
       esRef.current = null;
     }
 
-    // Не показываем 'loading', если у нас уже есть закешированные данные —
-    // иначе при обновлении страницы весь UI мигает спиннерами, хотя данные
-    // уже есть в localStorage и покажутся мгновенно.
-    const hasCached =
-      lsGet(LS.PARTNERS, []).length > 0 || lsGet(LS.SNAPSHOT, []).length > 0;
-    if (!hasCached) {
+    // Показываем 'loading' (скелетоны), только если данных с сервера ещё
+    // нет — при автоматических переподключениях UI не должен мигать.
+    if (!hasDataRef.current) {
       dispatch({ type: 'SET_STATUS', payload: 'loading' });
     }
 
@@ -237,8 +254,8 @@ export function DataProvider({ children }) {
   /* ── Возврат на вкладку → сразу подтянуть свежие данные ───────
    * Главный кейс «старые данные при заходе»: пользователь возвращается
    * на страницу через несколько часов, а SSE-соединение давно умерло
-   * (или было прибито прокси). Без этого данные остались бы
-   * с прошлого захода из localStorage. */
+   * (или было прибито прокси). Без этого вкладка осталась бы
+   * на данных с прошлого захода. */
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;

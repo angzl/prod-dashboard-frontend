@@ -463,15 +463,6 @@ function AdminPanelContent() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  // Считаем размер кеша
-  const cacheSize = (() => {
-    try {
-      const keys = ['dm_partners','dm_snapshot','dm_history','dm_last_ok'];
-      const bytes = keys.reduce((acc, k) => acc + (localStorage.getItem(k)?.length ?? 0), 0);
-      return bytes < 1024 ? `${bytes} B` : `${(bytes/1024).toFixed(1)} KB`;
-    } catch { return '—'; }
-  })();
-
   const historyEntries = Object.keys(history).length;
 
   return (
@@ -609,7 +600,7 @@ function AdminPanelContent() {
             { label: 'Проектов',        value: partners.length },
             { label: 'Записей снепшота', value: snapshot.length },
             { label: 'Ключей истории',  value: historyEntries },
-            { label: 'Размер кеша',     value: cacheSize },
+            { label: 'Хранение данных', value: 'сервер (без кеша браузера)' },
             { label: 'Интервал',        value: settings.intervalMs === 0 ? 'Выкл.' : `${settings.intervalMs / 1000}с` },
             { label: 'История (дней)',   value: settings.historyDays },
           ].map(({ label, value }) => (
