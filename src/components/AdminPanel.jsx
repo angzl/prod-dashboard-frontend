@@ -211,6 +211,7 @@ function MonitoredProjectsSection() {
 
   const [owners, setOwners]         = useState([]);        // все овнеры из БД
   const [monitored, setMonitored]   = useState([]);        // [{name, priority}]
+  const [instProjects, setInstProjects] = useState([]);    // инсталяции (projects.json)
   const [search, setSearch]         = useState('');
   const [loading, setLoading]       = useState(true);
   const [saving, setSaving]         = useState(false);
@@ -222,16 +223,19 @@ function MonitoredProjectsSection() {
   const loadData = async (refreshOwners = false) => {
     setLoading(true);
     try {
-      const [ownersRes, monRes] = await Promise.all([
+      const [ownersRes, monRes, projRes] = await Promise.all([
         fetch(`${apiBase}/api/admin/owners?pin=${pin()}${refreshOwners ? '&refresh=true' : ''}`),
         fetch(`${apiBase}/api/admin/monitored?pin=${pin()}`),
+        fetch(`${apiBase}/api/admin/projects?pin=${pin()}`),
       ]);
       const ownersData = await ownersRes.json();
       const monData    = await monRes.json();
+      const projData   = await projRes.json();
       setOwners(ownersData.owners || []);
       setMonitored((monData.projects || []).map(p => ({
         name: p.name, priority: p.priority !== false,
       })));
+      setInstProjects((projData.projects || []).filter(p => p.category === 'installation'));
       setDirty(false);
     } catch {
       setMsg({ type: 'error', text: 'Не удалось загрузить список проектов' });
@@ -261,6 +265,25 @@ function MonitoredProjectsSection() {
   const togglePriority = (name) => {
     setMonitored(m => m.map(p => p.name === name ? { ...p, priority: !p.priority } : p));
     setDirty(true);
+  };
+
+  /* Инсталяции: мониторинг включается/выключается прямо здесь —
+   * конфиг уходит в projects.json через POST /api/admin/projects
+   * (пароли замаскированы '***' и не перезаписываются на сервере). */
+  const toggleInstMonitor = async (p) => {
+    try {
+      const res = await fetch(`${apiBase}/api/admin/projects?pin=${pin()}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...p, monitor: p.monitor === false }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      setInstProjects(lst => lst.map(x => x.name === p.name ? { ...x, monitor: x.monitor === false } : x));
+      setMsg({ type: 'ok', text: `Мониторинг «${p.name}» ${p.monitor === false ? 'включён' : 'выключен'}` });
+      setTimeout(() => refreshNow(), 1500);
+    } catch (e) {
+      setMsg({ type: 'error', text: `Ошибка: ${e.message}` });
+    }
   };
 
   const save = async () => {
@@ -418,6 +441,52 @@ function MonitoredProjectsSection() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Инсталяции — отдельный блок (те же проекты общего списка,
+          но с агрегатными метриками по всей инсталяции) */}
+      <div style={{ ...boxStyle, flex: '1 1 100%', minHeight: 'auto', maxHeight: 260, marginTop: 14 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
+          🏠 Инсталяции ({instProjects.length})
+          <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>
+            добавляются в блоке «Инсталяции и БД» выше; здесь — включение мониторинга
+          </span>
+        </div>
+        {instProjects.length === 0 && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: 16 }}>
+            Инсталяций пока нет — добавьте первую в секции «Инсталяции и БД» выше ⬆️
+          </div>
+        )}
+        {instProjects.map(p => (
+          <div key={p.name} style={{ ...listRowStyle, background: 'rgba(251,191,36,0.04)' }}>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+              overflow: 'hidden', flex: 1, userSelect: 'none',
+            }}>
+              <input
+                type="checkbox"
+                checked={p.monitor !== false}
+                onChange={() => toggleInstMonitor(p)}
+                title={p.monitor !== false ? 'Мониторинг включён (срез раз в 3 часа)' : 'Мониторинг выключен'}
+                style={{ accentColor: '#f59e0b', width: 15, height: 15, flexShrink: 0 }}
+              />
+              <span style={{ color: 'var(--text)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                🏠 {p.name}
+              </span>
+              {p.use_ssh && (
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }} title={`SSH: ${p.ssh?.host}:${p.ssh?.port}`}>
+                  🔐 {p.ssh?.host}:{p.ssh?.port}
+                </span>
+              )}
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0 }}>
+                {p.databases.map(d => d.type).join(' · ')}
+              </span>
+              {p.monitor === false && (
+                <span style={{ fontSize: 10, color: '#f87171', flexShrink: 0 }}>мониторинг выкл</span>
+              )}
+            </label>
+          </div>
+        ))}
       </div>
 
       {/* Сохранение */}

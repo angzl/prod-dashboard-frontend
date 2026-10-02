@@ -8,6 +8,7 @@ import AllProjectsHistoryTable from './components/AllProjectsHistoryTable';
 import AllProjectsTotalTable   from './components/AllProjectsTotalTable';
 import MetricCards        from './components/MetricCards';
 import ProjectMetricCards from './components/ProjectMetricCards';
+import InstallationsBlock from './components/InstallationsBlock';
 import AdminPanel         from './components/AdminPanel';
 import ErrorBoundary      from './components/ErrorBoundary';
 import Skeleton           from './components/Skeleton';
@@ -215,6 +216,10 @@ function AppInner() {
             />
           </div>
           <PartnerTable />
+
+          {/* Инсталяции — отдельный блок (как прод-проекты, но с агрегатными
+              метриками по всей инсталяции; клик — фокус на инсталяцию) */}
+          <InstallationsBlock />
 
           <div className="section-title">
             📊 История по всем проектам

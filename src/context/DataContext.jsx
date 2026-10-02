@@ -372,6 +372,7 @@ export function DataProvider({ children }) {
     ...state,
     partners,
     snapshot,
+    allSnapshot: state.snapshot,     // снепшот без фильтра контекста (прод + инсталяции)
     installations: state.installations || [],
     installation,
     prodName,
