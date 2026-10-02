@@ -71,6 +71,34 @@ function LastUpdateBadge() {
   );
 }
 
+/* ── Переключатель контекста: Прод / инсталяция ────────────── */
+function InstallationSwitcher() {
+  const { installations, installation, prodName, setInstallation } = useDataStore();
+
+  // Показываем селектор только когда есть хотя бы одна инсталяция
+  const list = installations || [];
+  if (list.filter(i => i.category !== 'prod').length === 0) return null;
+
+  return (
+    <select
+      value={installation || ''}
+      onChange={(e) => setInstallation(e.target.value || null)}
+      title="Чьи данные показывать: прод (по партнёрам) или конкретную инсталяцию"
+      style={{
+        background: '#222536', border: '1px solid #2e3248', borderRadius: 8,
+        color: '#e2e8f0', fontSize: 12, fontWeight: 600, padding: '5px 10px',
+        cursor: 'pointer',
+      }}
+    >
+      {list.map(i => (
+        <option key={i.name} value={i.name}>
+          {i.category === 'prod' ? `🌐 ${i.name} (прод)` : `🏠 ${i.name}`}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 /* ── Время среза из БД (первый столбец daily_snapshots) ────── */
 function SnapshotTimeBadge() {
   const { snapshot } = useDataStore();
@@ -157,6 +185,7 @@ function AppInner() {
           Мониторинг прод v_3.7
         </h1>
         <SnapshotTimeBadge />
+        <InstallationSwitcher />
         <HeaderStatus />
       </div>
 

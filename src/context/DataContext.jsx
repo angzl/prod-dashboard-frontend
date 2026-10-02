@@ -59,6 +59,9 @@ const initialState = {
   // monitored — [{name, priority}] с сервера; флаг «не приоритет»
   // управляет видимостью проекта в сводках (скрыт за кнопкой «показать все»)
   monitored: [],
+  // installations — [{name, category, active, monitor}] с сервера;
+  // переключатель контекста «Прод / инсталяция» на дашборде
+  installations: [],
   settings:  { ...DEFAULT_SETTINGS, ...lsGet(LS.SETTINGS, {}) },
   lastOk:    null,      // ISO — момент последнего полученного сообщения от сервера
   serverLastOk: null,   // last_ok с сервера (unix timestamp)
@@ -73,7 +76,7 @@ function reducer(state, action) {
 
     /** Пришло сообщение из SSE-стрима — полный снимок данных с сервера */
     case 'STREAM_OK': {
-      const { partners, snapshot, history, timeline, monitored, serverLastOk } = action.payload;
+      const { partners, snapshot, history, timeline, monitored, installations, serverLastOk } = action.payload;
 
       // Если серверный last_ok не изменился и у нас уже есть данные —
       // это повторная отправка того же снимка (например, при переподключении
@@ -103,6 +106,7 @@ function reducer(state, action) {
         history:      history      ?? state.history,
         timeline:     timeline     ?? state.timeline,
         monitored:    monitored    ?? state.monitored,
+        installations: installations ?? state.installations,
         lastOk,
         serverLastOk: serverLastOk ?? state.serverLastOk,
         status:       'ok',
@@ -129,6 +133,7 @@ function reducer(state, action) {
         history: {},
         timeline: { columns: [], data: {}, ranges: {} },
         monitored: [],
+        installations: [],
         lastOk: null,
         serverLastOk: null,
       };
@@ -175,6 +180,7 @@ export function DataProvider({ children }) {
         history:      data.history,
         timeline:     data.timeline,
         monitored:    data.monitored,
+        installations: data.installations,
         serverLastOk: data.last_ok,
       },
     });
@@ -335,8 +341,41 @@ export function DataProvider({ children }) {
     return Date.now() - new Date(state.lastOk).getTime() > state.settings.offlineThreshMs;
   })();
 
+  /* ── Переключатель контекста: прод / инсталяция ────────────────
+   * Все компоненты читают из стора partners/snapshot. Здесь мы
+   * подменяем их отфильтрованными по выбранной инсталяции версиями,
+   * поэтому весь дашборд (таблицы, карточки, графики) автоматически
+   * переключается контекстом без правок каждого компонента. */
+  const [installationChoice, setInstallationChoice] = useState(null); // null → авто (прод)
+
+  const prodName = React.useMemo(() => {
+    const prod = (state.installations || []).find(i => i.category === 'prod');
+    return prod?.name || state.installations?.[0]?.name || null;
+  }, [state.installations]);
+
+  const installation = installationChoice || prodName;
+
+  const snapshot = React.useMemo(() => {
+    if (!installation) return state.snapshot;
+    return (state.snapshot || []).filter(r => (r.installation || prodName) === installation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.snapshot, installation, prodName]);
+
+  const partners = React.useMemo(() => {
+    if (!installation || installation === prodName) return state.partners;
+    // у инсталяции нет списка партнёров — одна строка срезa = вся инсталяция
+    return [...new Set(snapshot.map(r => r.partner))];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snapshot, installation, prodName, state.partners]);
+
   const value = {
     ...state,
+    partners,
+    snapshot,
+    installations: state.installations || [],
+    installation,
+    prodName,
+    setInstallation: setInstallationChoice,
     isApiOffline,
     getHistory,
     priorityMap,

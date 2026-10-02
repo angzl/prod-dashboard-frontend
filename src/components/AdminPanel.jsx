@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDataStore } from '../context/DataContext';
+import ProjectsAdminSection from './ProjectsAdmin';
 
 /* ── PIN-защита ───────────────────────────────────────────── */
 const PIN_KEY     = 'dm_admin_auth';
@@ -538,6 +539,9 @@ function AdminPanelContent() {
           />
         </SettingRow>
       </div>
+
+      {/* Секция: Инсталяции и БД (projects.json CRUD) */}
+      <ProjectsAdminSection />
 
       {/* Секция: Проекты мониторинга (два блока) */}
       <MonitoredProjectsSection />
