@@ -17,7 +17,7 @@
  */
 import React, {
   createContext, useContext, useEffect,
-  useRef, useCallback, useReducer,
+  useRef, useCallback, useReducer, useState,
 } from 'react';
 
 /* ── localStorage: ТОЛЬКО персональные UI-настройки ─────────── */
