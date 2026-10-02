@@ -23,7 +23,7 @@ function MetricPill({ num, den, good, med }) {
 }
 
 export default function InstallationsBlock() {
-  const { allSnapshot, installations, prodName, setInstallation } = useDataStore();
+  const { allSnapshot, installations, prodName } = useDataStore();
 
   const instList = useMemo(
     () => (installations || []).filter(i => i.category !== 'prod' && i.monitor !== false),
@@ -100,9 +100,7 @@ export default function InstallationsBlock() {
                 return (
                   <tr
                     key={r.name}
-                    onClick={() => setInstallation(r.name)}
-                    title="Клик — переключить дашборд на эту инсталяцию"
-                    style={{ cursor: 'pointer', transition: 'background 0.15s' }}
+                    style={{ transition: 'background 0.15s' }}
                     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.05)'; }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
                   >

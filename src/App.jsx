@@ -9,6 +9,7 @@ import AllProjectsTotalTable   from './components/AllProjectsTotalTable';
 import MetricCards        from './components/MetricCards';
 import ProjectMetricCards from './components/ProjectMetricCards';
 import InstallationsBlock from './components/InstallationsBlock';
+import InstallationsHistoryTable from './components/InstallationsHistoryTable';
 import AdminPanel         from './components/AdminPanel';
 import ErrorBoundary      from './components/ErrorBoundary';
 import Skeleton           from './components/Skeleton';
@@ -72,34 +73,6 @@ function LastUpdateBadge() {
   );
 }
 
-/* ── Переключатель контекста: Прод / инсталяция ────────────── */
-function InstallationSwitcher() {
-  const { installations, installation, prodName, setInstallation } = useDataStore();
-
-  // Показываем селектор только когда есть хотя бы одна инсталяция
-  const list = installations || [];
-  if (list.filter(i => i.category !== 'prod').length === 0) return null;
-
-  return (
-    <select
-      value={installation || ''}
-      onChange={(e) => setInstallation(e.target.value || null)}
-      title="Чьи данные показывать: прод (по партнёрам) или конкретную инсталяцию"
-      style={{
-        background: '#222536', border: '1px solid #2e3248', borderRadius: 8,
-        color: '#e2e8f0', fontSize: 12, fontWeight: 600, padding: '5px 10px',
-        cursor: 'pointer',
-      }}
-    >
-      {list.map(i => (
-        <option key={i.name} value={i.name}>
-          {i.category === 'prod' ? `🌐 ${i.name} (прод)` : `🏠 ${i.name}`}
-        </option>
-      ))}
-    </select>
-  );
-}
-
 /* ── Время среза из БД (первый столбец daily_snapshots) ────── */
 function SnapshotTimeBadge() {
   const { snapshot } = useDataStore();
@@ -151,7 +124,7 @@ function HeaderStatus() {
 /* ── Основное приложение (внутри DataProvider) ────────────── */
 function AppInner() {
   const {
-    partners, snapshot, settings, getHistory,
+    partners, snapshot, allSnapshot, installations, settings, getHistory,
   } = useDataStore();
 
   const [activeTab,       setActiveTab]       = useState('overview');
@@ -162,10 +135,17 @@ function AppInner() {
   // нескольких. Отдельная вкладка «Сравнение» больше не нужна.
   const [detailMode, setDetailMode] = useState('single');
 
+  // Инсталяции для общего списка выбора: овнер или инсталяция — вместе
+  const instList = (installations || []).filter(i => i.category !== 'prod' && i.monitor !== false);
+
   // Если selectedPartner ещё не выбран — берём первый из списка
   const partner = selectedPartner || partners[0] || '';
-  const currentProjectData = snapshot.find(p => p.partner === partner);
-  const partnerOptions     = partners.map(p => ({ value: p, label: p }));
+  // Данные проекта ищем в полном снепшоте (прод + инсталяции)
+  const currentProjectData = (allSnapshot || snapshot).find(p => p.partner === partner);
+  const partnerOptions = [
+    ...partners.map(p => ({ value: p, label: p })),
+    ...instList.map(i => ({ value: i.name, label: `🏠 ${i.name}` })),
+  ];
 
   const TABS = [
     { id: 'overview', label: '📋 Сводка'      },
@@ -186,7 +166,6 @@ function AppInner() {
           Мониторинг прод v_3.7
         </h1>
         <SnapshotTimeBadge />
-        <InstallationSwitcher />
         <HeaderStatus />
       </div>
 
@@ -218,8 +197,11 @@ function AppInner() {
           <PartnerTable />
 
           {/* Инсталяции — отдельный блок (как прод-проекты, но с агрегатными
-              метриками по всей инсталяции; клик — фокус на инсталяцию) */}
+              метриками по всей инсталяции) */}
           <InstallationsBlock />
+
+          {/* История по всем инсталяциям (последний срез дня, активные ПУ и разрыв) */}
+          <InstallationsHistoryTable />
 
           <div className="section-title">
             📊 История по всем проектам
