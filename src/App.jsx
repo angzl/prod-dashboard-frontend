@@ -185,10 +185,20 @@ function AppInner() {
       {/* ══ СВОДКА ══════════════════════════════════════════ */}
       {activeTab === 'overview' && (
         <div className="tab-content">
-          <MetricCards partners={partners} snapshot={snapshot} />
+          {/* Карточки сверху — по ВСЕМ проектам мониторинга (прод + инсталяции) */}
+          <MetricCards
+            partners={[...partners, ...instList.map(i => i.name)]}
+            snapshot={allSnapshot || snapshot}
+          />
 
           <div className="section-title">
             📋 Сводка по всем проектам
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 9px', borderRadius: 20,
+              background: 'rgba(99,102,241,0.15)', color: '#a5b4fc',
+              border: '1px solid rgba(99,102,241,0.4)', textTransform: 'uppercase',
+              marginLeft: 8, verticalAlign: 'middle',
+            }}>прод</span>
             <InfoTip
               title="Сводка по всем проектам"
               text={'Текущие показатели каждого проекта на момент последнего среза из БД (см. «Данные на …» в шапке).\nОписание колонок — в значках «i» заголовков таблицы.'}
@@ -205,6 +215,12 @@ function AppInner() {
 
           <div className="section-title">
             📊 История по всем проектам
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '2px 9px', borderRadius: 20,
+              background: 'rgba(99,102,241,0.15)', color: '#a5b4fc',
+              border: '1px solid rgba(99,102,241,0.4)', textTransform: 'uppercase',
+              marginLeft: 8, verticalAlign: 'middle',
+            }}>прод</span>
             <InfoTip
               title="История по всем проектам"
               text={'Годы и месяцы — максимум за период (у «Разрыва» — минимум), дни — последний срез дня (время под датой).\nЦвет: красный — минимум, зелёный — максимум.'}
@@ -252,7 +268,9 @@ function AppInner() {
               <div>
                 <span className="filter-label">Проект</span>
                 <select value={partner} onChange={e => setSelectedPartner(e.target.value)}>
-                  {partners.map(p => <option key={p} value={p}>{p}</option>)}
+                  {partnerOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
                 </select>
               </div>
               )}
@@ -303,7 +321,9 @@ function AppInner() {
           {detailMode === 'single' && partner && (
             <div className="card">
               <div className="card-header">
-                <span style={{ marginRight: 6 }}>📌 {partner}</span>
+                <span style={{ marginRight: 6 }}>
+                  📌 {instList.some(i => i.name === partner) ? '🏠 ' : ''}{partner}
+                </span>
                 {fmtSnapDt(currentProjectData?.snap_datetime) && (
                   <span className="snap-sub" style={{ marginTop: 0 }}>
                     🗄 данные на {fmtSnapDt(currentProjectData.snap_datetime)} (срез из БД)

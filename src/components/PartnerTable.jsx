@@ -99,7 +99,7 @@ const SnapDtCell = React.memo(function SnapDtCell({ snapDatetime }) {
 });
 
 /* ── Строка таблицы (мемоизирована) ───────────────────────── */
-const TableRow = React.memo(function TableRow({ row, rowBg }) {
+const TableRow = React.memo(function TableRow({ row, rowBg, chipPrefix }) {
   const total     = parseInt(row.total_pu)  || 0;
   const active    = parseInt(row.pu_active) || 0;
   const activePct = total > 0 ? (active  / total) * 100 : 0;
@@ -123,7 +123,9 @@ const TableRow = React.memo(function TableRow({ row, rowBg }) {
       onMouseLeave={e => { e.currentTarget.style.background = rowBg; }}
     >
       <td style={{ ...stickyTd(rowBg), ...tdBase, minWidth: 130 }}>
-        <span className="proj-chip" style={{ fontSize: 12 }}>{row.partner}</span>
+        <span className="proj-chip" style={{ fontSize: 12 }}>
+          {chipPrefix ? `${chipPrefix} ` : ''}{row.partner}
+        </span>
       </td>
       <td style={{ ...tdBase, color: 'var(--text-muted)', fontSize: 13, minWidth: 90 }}>
         {fmt(total)}
@@ -185,8 +187,18 @@ function computeRowMetrics(row) {
 
 const SORT_ICONS = { asc: ' ▲', desc: ' ▼', none: '' };
 
-function PartnerTable() {
-  const { snapshot: data, status, priorityMap, monitored } = useDataStore();
+/* variant='prod' (по умолчанию) — прод-проекты; variant='installations' —
+ * строки инсталяций из полного снепшота (allSnapshot), с префиксом 🏠.
+ * Колонки, сортировка, поиск и цветовая индикация — идентичны прод-таблице. */
+function PartnerTable({ variant = 'prod' }) {
+  const { snapshot: prodSnapshot, allSnapshot, prodName, status, priorityMap, monitored } = useDataStore();
+  const isInst = variant === 'installations';
+
+  const data = useMemo(() => {
+    if (!isInst) return prodSnapshot;
+    return (allSnapshot || []).filter(r => r.installation && r.installation !== prodName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInst, prodSnapshot, allSnapshot, prodName]);
 
   const [search,      setSearch]      = useState('');
   const [sortCol,     setSortCol]     = useState('partner');
@@ -219,7 +231,8 @@ function PartnerTable() {
     // Неприоритетные («не приоритет» из админки) раскрываются кнопкой
     // «Показать все проекты» под таблицей. При активном поиске фильтр
     // не применяем — пользователь ищет конкретный проект.
-    if (!q && !showLowPrio) {
+    // Для инсталяций фильтр приоритета неприменим (их нет в monitored).
+    if (!q && !showLowPrio && !isInst) {
       rows = rows.filter(({ row }) => priorityMap[row.partner] !== false);
     }
 
@@ -246,12 +259,18 @@ function PartnerTable() {
   }, [data, search, sortCol, sortDir, showLowPrio, priorityMap]);
 
   // Сколько неприоритетных проектов сейчас скрыто (для кнопки раскрытия)
-  const hiddenLowPrio = (monitored || []).filter(p => p && p.priority === false).length;
+  const hiddenLowPrio = isInst ? 0 : (monitored || []).filter(p => p && p.priority === false).length;
 
   if (status === 'loading' && data.length === 0)
     return <div className="state-msg">⏳ Загрузка таблицы...</div>;
   if (!data || data.length === 0)
-    return <div className="state-msg">Нет данных</div>;
+    return (
+      <div className="state-msg">
+        {isInst
+          ? '⏳ Срезы инсталяций ещё не сняты — данные появятся после первого фонового цикла (раз в 3 часа) или после перезапуска бота.'
+          : 'Нет данных'}
+      </div>
+    );
 
   return (
     <>
@@ -393,6 +412,7 @@ function PartnerTable() {
                 key={row.partner}
                 row={row}
                 rowBg={i % 2 === 1 ? 'rgba(255,255,255,0.013)' : 'var(--surface)'}
+                chipPrefix={isInst ? '🏠' : ''}
               />
             ))}
           </tbody>
