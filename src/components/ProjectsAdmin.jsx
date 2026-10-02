@@ -324,21 +324,6 @@ export default function ProjectsAdminSection() {
     }
   };
 
-  const activate = async (name) => {
-    try {
-      const res = await fetch(
-        `${apiBase}/api/admin/projects/${encodeURIComponent(name)}/activate?pin=${pin()}`,
-        { method: 'POST' },
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-      setMsg({ type: 'ok', text: `Активный проект: ${name}` });
-      load();
-    } catch (e) {
-      setMsg({ type: 'error', text: e.message });
-    }
-  };
-
 
   const onSaved = (project) => {
     setEditing(null);
@@ -407,28 +392,18 @@ export default function ProjectsAdminSection() {
                 {p.monitor === false ? ' · мониторинг выкл' : ''}
               </span>
               <span style={{ flex: 1 }} />
-              {!p.active && (
-                <button onClick={() => activate(p.name)}
-                  style={{
-                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                    background: 'var(--surface)', border: '1px solid var(--border)',
-                    color: 'var(--text-muted)', cursor: 'pointer',
-                  }}>Сделать активным</button>
-              )}
               <button onClick={() => setEditing(p)}
                 style={{
                   padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                   background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)',
                   color: '#a5b4fc', cursor: 'pointer',
                 }}>Изменить</button>
-              {!p.active && (
-                <button onClick={() => remove(p.name)}
-                  style={{
-                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-                    background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.35)',
-                    color: '#f87171', cursor: 'pointer',
-                  }}>Удалить</button>
-              )}
+              <button onClick={() => remove(p.name)}
+                style={{
+                  padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(220,38,38,0.35)',
+                  color: '#f87171', cursor: 'pointer',
+                }}>Удалить</button>
             </div>
           ))}
           <button onClick={() => setEditing({})}
