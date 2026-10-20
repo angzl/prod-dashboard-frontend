@@ -101,7 +101,7 @@ function useWindowWidth() {
 }
 
 function AllProjectsTotalTable() {
-  const { timeline, status } = useDataStore();
+  const { timeline, status, partners } = useDataStore();
   const [hoverCol, setHoverCol] = useState(null);
 
   useWindowWidth();
@@ -109,10 +109,22 @@ function AllProjectsTotalTable() {
 
   const columns = (timeline && timeline.columns) || [];
 
-  const { aggregated, ranges } = useMemo(() => {
-    if (!columns.length) return { aggregated: {}, ranges: {} };
+  const { aggregated, ranges, contribMeta } = useMemo(() => {
+    if (!columns.length)
+      return { aggregated: {}, ranges: {}, contribMeta: {} };
 
-    const data = (timeline && timeline.data) || {};
+    /* «Весь прод» — только прод-проекты мониторинга. В timeline.data
+       бэкенд кладёт и срезы инсталяций (partner = имя инсталяции:
+       Самара, Чита, ...), поэтому фильтруем по текущему списку
+       partners, иначе суммы истории не сходятся с карточками
+       (MetricCards) и графиками (TotalGraphs), которые считают
+       только по partners. */
+    const partnerSet = new Set(partners || []);
+    const allData = (timeline && timeline.data) || {};
+    const data = {};
+    Object.keys(allData).forEach((name) => {
+      if (partnerSet.has(name)) data[name] = allData[name];
+    });
     const agg = {};
     columns.forEach((col) => {
       agg[col.key] = aggregateColumn(data, col.key);
@@ -125,7 +137,16 @@ function AllProjectsTotalTable() {
         .map((col) => {
           const row = agg[col.key];
           if (!row) return NaN;
-          return clampVal(m.key, parseNum(row[m.key]));
+          /* Для метрик-долей (есть pctFn) заливаем по проценту, который
+             уже выводится под числом: Σ/Σ почти не зависит от состава
+             проектов мониторинга, поэтому цвета сравнимы между периодами
+             даже после добавления/удаления проекта. Абсолютные суммы
+             (noBg) не заливаются вовсе — их скачки объясняет строка
+             «Проектов». */
+          const v = m.pctFn
+            ? m.pctFn(row)
+            : clampVal(m.key, parseNum(row[m.key]));
+          return clampVal(m.key, v);
         })
         .filter((v) => !isNaN(v));
       rng[m.key] = {
@@ -134,8 +155,33 @@ function AllProjectsTotalTable() {
       };
     });
 
-    return { aggregated: agg, ranges: rng };
-  }, [timeline, columns]);
+    /* Проекты, реально давшие данные в каждую колонку (row есть только
+       у периодов, где у проекта были срезы). Из них — число под датой
+       и метки смены состава мониторинга. */
+    const contributing = {};
+    Object.keys(data).forEach((name) => {
+      const partnerCols = data[name] || {};
+      columns.forEach((col) => {
+        if (partnerCols[col.key]) {
+          (contributing[col.key] = contributing[col.key] || []).push(name);
+        }
+      });
+    });
+
+    const meta = {};
+    let prev = null;
+    columns.forEach((col) => {
+      const cur = contributing[col.key] || [];
+      const prevSet = prev ? new Set(prev) : new Set();
+      const curSet = new Set(cur);
+      const added = cur.filter((n) => !prevSet.has(n));
+      const removed = prev ? prev.filter((n) => !curSet.has(n)) : [];
+      meta[col.key] = { count: cur.length, added, removed };
+      prev = cur;
+    });
+
+    return { aggregated: agg, ranges: rng, contribMeta: meta };
+  }, [timeline, columns, partners]);
 
   const hasAnyData =
     columns.length > 0 && Object.values(aggregated).some((v) => v != null);
@@ -296,6 +342,84 @@ function AllProjectsTotalTable() {
         </thead>
 
         <tbody>
+          {/* Строка состава: сколько проектов реально дали данные в колонку.
+              Жёлтая точка — состав изменился относительно предыдущей колонки
+              (добавление/удаление проектов мониторинга): суммы до и после
+              напрямую несравнимы. */}
+          <tr>
+            <td
+              style={{
+                ...stickyMetric,
+                fontSize: 10,
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+              }}
+            >
+              Проектов
+            </td>
+            {columns.map((col, colIdx) => {
+              const meta =
+                contribMeta[col.key] || { count: 0, added: [], removed: [] };
+              const isGroupStart =
+                colIdx === 0 || columns[colIdx - 1].type !== col.type;
+              const changed =
+                colIdx > 0 &&
+                (meta.added.length > 0 || meta.removed.length > 0);
+              const changesText = [
+                meta.added.length ? '+' + meta.added.join(', ') : '',
+                meta.removed.length ? '−' + meta.removed.join(', ') : '',
+              ]
+                .filter(Boolean)
+                .join(' / ');
+              const tip =
+                'Проектов с данными: ' + meta.count +
+                (changed
+                  ? '\nСостав изменился: ' + changesText +
+                    '\nСуммы до и после напрямую несравнимы.'
+                  : colIdx > 0
+                  ? '\nСостав не менялся.'
+                  : '');
+              return (
+                <td
+                  key={col.key}
+                  title={tip}
+                  style={{
+                    padding: '3px 8px',
+                    minWidth: 70,
+                    textAlign: 'right',
+                    fontSize: 10,
+                    fontVariantNumeric: 'tabular-nums',
+                    whiteSpace: 'nowrap',
+                    background: COL_TYPE_BG[col.type],
+                    borderBottom: '1px solid var(--border)',
+                    borderLeft: isGroupStart
+                      ? '2px solid rgba(99,102,241,0.35)'
+                      : undefined,
+                    outline:
+                      hoverCol === colIdx
+                        ? '1px solid rgba(165,180,252,0.4)'
+                        : undefined,
+                    outlineOffset: '-1px',
+                  }}
+                  onMouseEnter={() => setHoverCol(colIdx)}
+                  onMouseLeave={() => setHoverCol(null)}
+                >
+                  <span
+                    style={{
+                      color: changed ? '#fcd34d' : 'var(--text-muted)',
+                      fontWeight: changed ? 700 : 400,
+                    }}
+                  >
+                    {meta.count > 0 ? meta.count : '—'}
+                  </span>
+                  {changed && (
+                    <span style={{ color: '#fcd34d', marginLeft: 3 }}>●</span>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+
           {METRICS.map((metric, mIdx) => {
             const isPlain = !!metric.noBg;
             const range = ranges[metric.key] || { min: 0, max: 0 };
@@ -339,7 +463,12 @@ function AllProjectsTotalTable() {
                     );
                   }
 
-                  const colorVal = parseNum(row[metric.key]);
+                  /* Заливка: для метрик-долей — по проценту (устойчиво к
+                     смене состава проектов мониторинга), для остальных —
+                     по абсолютному значению. */
+                  const colorVal = metric.pctFn
+                    ? metric.pctFn(row)
+                    : parseNum(row[metric.key]);
                   const gradStyle =
                     !isPlain && !isNaN(colorVal)
                       ? getCellStyle(
