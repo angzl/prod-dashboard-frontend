@@ -379,6 +379,14 @@ function PartnerTable({ variant = 'prod' }) {
                   text={COLUMNS.find(c => c.key === 'three').tip}
                 />
               </th>
+              <th style={{ ...thStyle, minWidth: 170, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => toggleSort('seven')}>
+                Сбор Т0 7 дней (ПП890){sortCol === 'seven' ? SORT_ICONS[sortDir] : ''}
+                <InfoTip
+                  title="Сбор Т0 7 дней (ПП890)"
+                  text={COLUMNS.find(c => c.key === 'seven').tip}
+                />
+              </th>
               <th style={{ ...thStyle, minWidth: 72, maxWidth: 90, cursor: 'pointer', userSelect: 'none' }}
                   onClick={() => toggleSort('gap')}>
                 Разрыв{sortCol === 'gap' ? SORT_ICONS[sortDir] : ''}

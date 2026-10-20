@@ -114,6 +114,15 @@ const METRICS_TIMELINE = [
       return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
     },
   },
+  {
+    key:   't0_7days',
+    label: 'Сбор Т0 7д (ПП890)',
+    pctFn: (row) => {
+      const total = parseFloat(row['total_on_platform']);
+      const val   = parseFloat(row['t0_7days']);
+      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
+    },
+  },
   { key: 'bs_total',  label: 'БС всего',  noBg: true },
   {
     key:   'bs_online',
@@ -163,6 +172,15 @@ const METRICS_DETAIL = [
     pctFn: (row) => {
       const total = parseFloat(row['total_on_platform']);
       const val   = parseFloat(row['t0_three_days']);
+      return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
+    },
+  },
+  {
+    key:   't0_7days',
+    label: 'Сбор Т0 7 дней (ПП890)',
+    pctFn: (row) => {
+      const total = parseFloat(row['total_on_platform']);
+      const val   = parseFloat(row['t0_7days']);
       return (total > 0 && !isNaN(val)) ? (val / total * 100) : NaN;
     },
   },
