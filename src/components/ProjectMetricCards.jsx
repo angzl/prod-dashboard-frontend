@@ -38,14 +38,14 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
    * ранний return при отсутствии данных, из-за чего число хуков менялось
    * между рендерами и React падал с ошибкой #310. */
   const {
-    total, active, t0Today, t0Prev, t0Three, bsOn, bsTotal, gap,
-    activePct, todayPct, prevPct, threePct, bsPct,
+    total, active, t0Today, t0Prev, t0Three, t0Seven, bsOn, bsTotal, gap,
+    activePct, todayPct, prevPct, threePct, sevenPct, bsPct,
   } = useMemo(() => {
     if (!projectData) {
       return {
-        total: 0, active: 0, t0Today: 0, t0Prev: 0, t0Three: 0,
+        total: 0, active: 0, t0Today: 0, t0Prev: 0, t0Three: 0, t0Seven: 0,
         bsOn: 0, bsTotal: 0, gap: 0,
-        activePct: 0, todayPct: 0, prevPct: 0, threePct: 0, bsPct: 0,
+        activePct: 0, todayPct: 0, prevPct: 0, threePct: 0, sevenPct: 0, bsPct: 0,
       };
     }
     const total   = parseInt(projectData.total_pu)  || 0;
@@ -53,15 +53,17 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     const t0Today = parseInt(projectData.today)     || 0;
     const t0Prev  = parseInt(projectData.date_1)    || 0;
     const t0Three = parseInt(projectData.date_3)    || 0;
+    const t0Seven = parseInt(projectData.date_7)    || 0;
     const bsOn    = parseInt(projectData.bs_online) || 0;
     const bsTotal = parseInt(projectData.bs_total)  || bsOn;
     const gap     = parseFloat(projectData.gap_pct) || 0;
     return {
-      total, active, t0Today, t0Prev, t0Three, bsOn, bsTotal, gap,
+      total, active, t0Today, t0Prev, t0Three, t0Seven, bsOn, bsTotal, gap,
       activePct: total   > 0 ? (active  / total)   * 100 : 0,
       todayPct:  total   > 0 ? (t0Today / total)   * 100 : 0,
       prevPct:   total   > 0 ? (t0Prev  / total)   * 100 : 0,
       threePct:  total   > 0 ? (t0Three / total)   * 100 : 0,
+      sevenPct:  total   > 0 ? (t0Seven / total)   * 100 : 0,
       bsPct:     bsTotal > 0 ? (bsOn    / bsTotal) * 100 : 0,
     };
   }, [projectData]);
@@ -77,6 +79,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
   const todayT   = colorTheme(todayPct,   75, 50);
   const prevT    = colorTheme(prevPct,    75, 50);
   const threeT   = colorTheme(threePct,   80, 60);
+  const sevenT   = colorTheme(sevenPct,   85, 70);
   const bsT      = colorTheme(bsPct,      85, 70);
   const gapT     = gap <= 5
     ? { cls: 'col-green',  accent: 'accent-green',  bar: 'bar-green',  hex: '#4ade80' }
@@ -90,6 +93,7 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
     t0Today: 'Собранные суточные архивы показаний (Т0) за сегодняшнюю дату. «Охват» — доля от общего числа ПУ проекта.',
     t0Prev: 'Собранные суточные архивы показаний (Т0) за вчерашнюю дату. «Охват» — доля от общего числа ПУ проекта.',
     t0Three: 'Собранные суточные архивы показаний (Т0) за дату трёхдневной давности. «Охват» — доля от общего числа ПУ проекта.',
+    t0Seven: 'Уникальные ПУ, по которым хотя бы раз за последние 7 дней собрался суточный архив Т0 (archive_day, без ошибок). «Охват» — доля от общего числа ПУ проекта.',
     bs: 'Базовые станции проекта: <b>Онлайн</b> — были на связи в последний час перед срезом; <b>Всего</b> — все БС проекта. «Доступность» — доля онлайн от общего числа.',
     gap: 'Разрыв между активными ПУ и собранными Т0 за 3 дня: 100% − (ТО 3 дня ÷ Активных). Показывает долю активных приборов, по которым архив не собран. До 5% — норма, до 15% — повышенный, выше — критичный.',
   };
@@ -198,6 +202,27 @@ const ProjectMetricCards = React.memo(function ProjectMetricCards({ projectData,
           </div>
           <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
             <div className={`bar-fill ${threeT.bar}`} style={{ width: `${Math.min(threePct, 100)}%`, height: 4 }} />
+          </div>
+        </>
+      ),
+    },
+
+    // ── ТО 7 дней ────────────────────────────────────────────────
+    {
+      label:   'ТО 7 дней',
+      accent:  sevenT.accent,
+      tip:     TIPS.t0Seven,
+      content: (
+        <>
+          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', marginBottom: 6 }}>
+            {fmt(t0Seven)}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>охват</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: sevenT.hex }}>{sevenPct.toFixed(1)}%</span>
+          </div>
+          <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+            <div className={`bar-fill ${sevenT.bar}`} style={{ width: `${Math.min(sevenPct, 100)}%`, height: 4 }} />
           </div>
         </>
       ),

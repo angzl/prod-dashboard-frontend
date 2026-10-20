@@ -109,6 +109,8 @@ const TableRow = React.memo(function TableRow({ row, rowBg, chipPrefix }) {
   const prevPct   = total > 0 ? (t0Prev  / total) * 100 : 0;
   const t0Three   = parseInt(row.date_3)    || 0;
   const threePct  = total > 0 ? (t0Three / total) * 100 : 0;
+  const t0Seven   = parseInt(row.date_7)    || 0;
+  const sevenPct  = total > 0 ? (t0Seven / total) * 100 : 0;
   const gap       = parseFloat(row.gap_pct) || 0;
   const bsOn      = parseInt(row.bs_online) || 0;
   const bsTot     = parseInt(row.bs_total)  || bsOn;
@@ -134,6 +136,7 @@ const TableRow = React.memo(function TableRow({ row, rowBg, chipPrefix }) {
       <NumPctCell num={t0Today} pct={todayPct} good={75} med={50} />
       <NumPctCell num={t0Prev} pct={prevPct} good={75} med={50} />
       <NumPctCell num={t0Three} pct={threePct} good={80} med={60} />
+      <NumPctCell num={t0Seven} pct={sevenPct} good={85} med={70} />
       <td style={{ ...tdBase, minWidth: 72, maxWidth: 90, textAlign: 'center' }}>
         <span className={`pill ${gapPilCls}`} style={{ fontSize: 11 }}>
           {gap.toFixed(1)}%
@@ -159,6 +162,8 @@ const COLUMNS = [
     tip: 'Собранные суточные архивы показаний (Т0) за вчерашнюю дату. Процент — доля от «Всего ПУ».' },
   { key: 'three',     label: 'ТО 3 дня',  sortField: 'threePct', minWidth: 150,
     tip: 'Собранные суточные архивы показаний (Т0) за дату трёхдневной давности. Процент — доля от «Всего ПУ».' },
+  { key: 'seven',     label: 'ТО 7 дней', sortField: 'sevenPct', minWidth: 150,
+    tip: 'Уникальные ПУ, по которым хотя бы раз за последние 7 дней собрался суточный архив Т0 (archive_day, без ошибок). Процент — доля от «Всего ПУ».' },
   { key: 'gap',       label: 'Разрыв',    field: 'gap_pct',    type: 'num',  minWidth: 72,  maxWidth: 90,
     tip: 'Доля активных ПУ, по которым за 3 дня НЕ собран архив Т0: 100% − (ТО 3 дня ÷ Активных). Меньше — лучше.' },
   { key: 'bs',        label: 'БС',        sortField: 'bsPct',    minWidth: 130,
@@ -173,6 +178,7 @@ function computeRowMetrics(row) {
   const t0Today = parseInt(row.today)     || 0;
   const t0Prev  = parseInt(row.date_1)    || 0;
   const t0Three = parseInt(row.date_3)    || 0;
+  const t0Seven = parseInt(row.date_7)    || 0;
   const bsOn    = parseInt(row.bs_online) || 0;
   const bsTot   = parseInt(row.bs_total)  || bsOn;
   return {
@@ -181,6 +187,7 @@ function computeRowMetrics(row) {
     t0Today, todayPct:   total > 0 ? (t0Today / total) * 100 : 0,
     t0Prev,  prevPct:    total > 0 ? (t0Prev  / total) * 100 : 0,
     t0Three, threePct:   total > 0 ? (t0Three / total) * 100 : 0,
+    t0Seven, sevenPct:   total > 0 ? (t0Seven / total) * 100 : 0,
     bsOn, bsTot, bsPct:  bsTot > 0 ? (bsOn / bsTot) * 100 : 0,
   };
 }
