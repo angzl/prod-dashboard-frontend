@@ -2,7 +2,6 @@ import React, { useState, Suspense, lazy } from 'react';
 import Select from 'react-select';
 
 import { DataProvider, useDataStore } from './context/DataContext';
-import ApiStatusBar       from './components/ApiStatusBar';
 import PartnerTable       from './components/PartnerTable';
 import AllProjectsHistoryTable from './components/AllProjectsHistoryTable';
 import AllProjectsTotalTable   from './components/AllProjectsTotalTable';
@@ -124,7 +123,7 @@ function HeaderStatus() {
 /* ── Основное приложение (внутри DataProvider) ────────────── */
 function AppInner() {
   const {
-    partners, snapshot, allSnapshot, installations, settings, getHistory,
+    partners, snapshot, allSnapshot, installations, settings,
   } = useDataStore();
 
   const [activeTab,       setActiveTab]       = useState('overview');
@@ -156,9 +155,6 @@ function AppInner() {
 
   return (
     <div>
-      {/* Баннер недоступности API */}
-      <ApiStatusBar />
-
       {/* Шапка */}
       <div className="page-header">
         <h1>

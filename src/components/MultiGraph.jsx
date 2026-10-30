@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import Plot from 'react-plotly.js';
 import { useDataStore } from '../context/DataContext';
 
@@ -49,51 +49,30 @@ const PLOTLY_BASE = {
   showlegend:    true,
 };
 
-/**
- * Локальная версия серверного _build_graph: берём сырую историю
- * из SSE-стора, группируем по дню (последний срез дня) и формируем
- * массивы для графика. Так MultiGraph работает в рамках единой
- * push-модели и не делает отдельный HTTP-запрос.
- */
-function buildGraphData(rawHistory) {
-  if (!rawHistory || rawHistory.length === 0) {
-    return { dates: [], active_pu: [], t0: [] };
-  }
-  const grouped = {};
-  rawHistory.forEach(item => {
-    const day = item.snap_datetime.split(' ')[0];
-    if (!grouped[day] || item.snap_datetime > grouped[day].snap_datetime) {
-      grouped[day] = item;
-    }
-  });
-  const rows = Object.values(grouped).sort((a, b) =>
-    a.snap_datetime.localeCompare(b.snap_datetime)
-  );
-  return {
-    dates:     rows.map(r => r.snap_datetime.slice(0, 16)),
-    active_pu: rows.map(r => parseFloat(r.active_pu)    || 0),
-    t0:        rows.map(r => parseFloat(r.t0_three_days) || 0),
-  };
-}
-
 function MultiGraph({ projects, days = 30 }) {
-  const { getHistory, status } = useDataStore();
+  const { fetchMultiGraphData } = useDataStore();
+  const [data, setData] = useState(null);
 
-  const data = useMemo(() => {
-    if (!projects || projects.length === 0) return null;
-    const result = {};
-    projects.forEach(p => {
-      const raw = getHistory(p, days);
-      if (raw && raw.length > 0) result[p] = buildGraphData(raw);
+  // Стабильный ключ списка проектов (массив пересоздаётся при каждом рендере)
+  const projectsKey = (projects || []).join('\u0000');
+
+  /* Данные готовит СЕРВЕР (/api/graph_data_multi): дневная группировка
+     сырых срезов по каждому проекту выполняется на бэкенде. */
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    if (!projectsKey) return;
+    fetchMultiGraphData(projectsKey.split('\u0000'), days).then((d) => {
+      if (alive) setData(d);
     });
-    return result;
-  }, [projects, days, getHistory]);
+    return () => { alive = false; };
+  }, [projectsKey, days, fetchMultiGraphData]);
 
   if (!projects || projects.length === 0)
     return <div className="state-msg">Выберите проекты для сравнения</div>;
-  if (status === 'loading' && (!data || Object.keys(data).length === 0))
+  if (!data)
     return <div className="state-msg">⏳ Загрузка...</div>;
-  if (!data || Object.keys(data).length === 0)
+  if (Object.keys(data).length === 0)
     return <div className="state-msg">Нет данных для выбранных проектов</div>;
 
   const traces = [];

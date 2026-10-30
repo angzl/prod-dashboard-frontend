@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Plot from 'react-plotly.js';
 import { useDataStore } from '../context/DataContext';
 
@@ -78,36 +78,25 @@ function StatsBlock({ stats }) {
 }
 
 function Graph({ partner, days = 30 }) {
-  const { getHistory, status } = useDataStore();
+  const { fetchGraphData } = useDataStore();
+  const [data, setData] = useState(null);
 
-  // Берём историю из кеша и трансформируем в формат графика
-  const rawHistory = getHistory(partner, days);
+  /* Данные графика готовит СЕРВЕР (/api/graph_data): группировка сырых
+     срезов по дням выполняется на бэкенде, фронт получает готовые ряды
+     и только отрисовывает их — слабые ПК больше не фризят. */
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    if (!partner) return;
+    fetchGraphData(partner, days).then((d) => { if (alive) setData(d); });
+    return () => { alive = false; };
+  }, [partner, days, fetchGraphData]);
 
-  const data = React.useMemo(() => {
-    if (!rawHistory || rawHistory.length === 0) return null;
-    // Группируем: последний срез за день
-    const grouped = {};
-    rawHistory.forEach(item => {
-      const day = item.snap_datetime.split(' ')[0];
-      if (!grouped[day] || item.snap_datetime > grouped[day].snap_datetime)
-        grouped[day] = item;
-    });
-    const rows = Object.values(grouped).sort((a, b) =>
-      a.snap_datetime.localeCompare(b.snap_datetime)
-    );
-    return {
-      dates:     rows.map(r => r.snap_datetime.slice(0, 16)),
-      active_pu: rows.map(r => parseFloat(r.active_pu)    || 0),
-      t0:        rows.map(r => parseFloat(r.t0_three_days) || 0),
-      bs_online: rows.map(r => parseFloat(r.bs_online)    || 0),
-      bs_total:  rows.map(r => parseFloat(r.bs_total)     || 0),
-    };
-  }, [rawHistory]);
-
-  if (!data || !data.dates?.length) {
-    return status === 'loading'
-      ? <div className="state-msg">⏳ Загрузка графиков...</div>
-      : <div className="state-msg">Нет данных для отображения</div>;
+  if (!data) {
+    return <div className="state-msg">⏳ Загрузка графиков...</div>;
+  }
+  if (!data.dates || data.dates.length === 0) {
+    return <div className="state-msg">Нет данных для отображения</div>;
   }
 
   // Числовая ось X — непрерывный hover

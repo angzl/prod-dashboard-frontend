@@ -1,14 +1,18 @@
 /**
  * DataContext — фронтовый стор.
  *
- * Стратегия «тонкий клиент» (push-модель, без polling, БЕЗ кеша браузера):
+ * Стратегия «тонкий клиент» (push-модель, БЕЗ кеша браузера):
  *   1. Источник истины — ТОЛЬКО сервер: при старте показываем скелетоны,
- *      первое же SSE-сообщение приносит полный свежий снимок данных
+ *      первое же SSE-сообщение приносит ЛЁГКИЙ снимок (снепшот + timeline,
+ *      БЕЗ многомегабайтной истории)
  *   2. Открываем ОДНО SSE-соединение (/api/stream) на всё время работы страницы
  *   3. Сервер САМ присылает новые данные, как только его внутренний кеш
- *      обновился (раз в interval_seconds на бэкенде) — никаких повторных
- *      HTTP-запросов с фронта не требуется, независимо от числа открытых вкладок
- *   4. При разрыве соединения браузер (EventSource) автоматически переподключается
+ *      обновился — никаких повторных HTTP-запросов с фронта не требуется
+ *   4. История и данные графиков грузятся ПО ТРЕБОВАНИЮ (лёгкие запросы),
+ *      вся агрегация выполняется НА СЕРВЕРЕ — слабые ПК и медленные IP
+ *      больше не фризят от парсинга мегабайт JSON
+ *   5. При разрыве соединения браузер (EventSource) автоматически
+ *      переподключается
  *
  * Данные НЕ сохраняются в localStorage: у всех пользователей всегда одна и
  * та же (свежая) картина с сервера, а на слабых ПК нет фризов от
@@ -74,9 +78,10 @@ function reducer(state, action) {
     case 'SET_STATUS':
       return { ...state, status: action.payload, errorMsg: action.error ?? null };
 
-    /** Пришло сообщение из SSE-стрима — полный снимок данных с сервера */
+    /** Пришло сообщение из SSE-стрима — ЛЁГКИЙ снимок данных с сервера
+     *  (без истории: она грузится по требованию через ensureHistories) */
     case 'STREAM_OK': {
-      const { partners, snapshot, history, timeline, monitored, installations, serverLastOk } = action.payload;
+      const { partners, snapshot, timeline, monitored, installations, serverLastOk } = action.payload;
 
       // Если серверный last_ok не изменился и у нас уже есть данные —
       // это повторная отправка того же снимка (например, при переподключении
@@ -103,7 +108,6 @@ function reducer(state, action) {
         ...state,
         partners:     partners     ?? state.partners,
         snapshot:     snapshot     ?? state.snapshot,
-        history:      history      ?? state.history,
         timeline:     timeline     ?? state.timeline,
         monitored:    monitored    ?? state.monitored,
         installations: installations ?? state.installations,
@@ -113,6 +117,10 @@ function reducer(state, action) {
         errorMsg:     null,
       };
     }
+
+    /** Подгруженный по требованию кусок истории: {"partner_days": [rows]} */
+    case 'APPEND_HISTORY':
+      return { ...state, history: { ...state.history, ...action.payload } };
 
     case 'STREAM_ERROR':
       return { ...state, status: 'error', errorMsg: action.payload };
@@ -177,7 +185,6 @@ export function DataProvider({ children }) {
       payload: {
         partners:     data.partners,
         snapshot:     data.snapshot,
-        history:      data.history,
         timeline:     data.timeline,
         monitored:    data.monitored,
         installations: data.installations,
@@ -304,6 +311,10 @@ export function DataProvider({ children }) {
 
   const clearCache = useCallback(async () => {
     dispatch({ type: 'CLEAR_CACHE' });
+    // Сбрасываем кеш ленивой загрузки истории — после очистки данные
+    // должны прийти заново с сервера
+    fetchedKeysRef.current.clear();
+    historyFetchingRef.current.clear();
     const pin = sessionStorage.getItem('dm_admin_auth_pin') || '';
     try {
       await fetch(`${apiBase}/api/admin/clear?pin=${pin}`, { method: 'POST' });
@@ -323,6 +334,82 @@ export function DataProvider({ children }) {
 
   const getHistory = (partner, days) =>
     state.history[`${partner}_${days}`] ?? null;
+
+  /* ── Ленивая загрузка истории (по требованию) ──────────────────
+   * История больше НЕ приходит в SSE-снимке (тот стал лёгким, чтобы
+   * слабые ПК и медленные IP не фризили от мегабайт JSON). Таблицы
+   * и графики запрашивают её у сервера по мере необходимости:
+   *   ensureHistories(partners, days) — сырые срезы (таблицы истории);
+   *   fetchGraphData / fetchMultiGraphData / fetchGraphTotals —
+   *   готовые агрегированные ряды для графиков (агрегация на сервере).
+   * Загруженное держим в памяти с TTL (HISTORY_TTL_MS): устаревшая
+   * запись перезагружается при следующем обращении — данные остаются
+   * свежими без постоянного трафика. */
+  const HISTORY_TTL_MS = 5 * 60_000;
+  const fetchedKeysRef     = useRef(new Map()); // "partner_days" -> ts загрузки
+  const historyFetchingRef = useRef(new Set()); // ключи «в процессе загрузки»
+
+  const ensureHistories = useCallback(async (partners, days) => {
+    if (!Array.isArray(partners) || partners.length === 0) return;
+    const now = Date.now();
+    const stale = partners.filter((p) => {
+      const ts = fetchedKeysRef.current.get(`${p}_${days}`);
+      return ts === undefined || now - ts > HISTORY_TTL_MS;
+    });
+    const fresh = stale.filter((p) => !historyFetchingRef.current.has(`${p}_${days}`));
+    if (fresh.length === 0) return;
+    fresh.forEach((p) => historyFetchingRef.current.add(`${p}_${days}`));
+    try {
+      const qs = fresh.map((p) => `partners=${encodeURIComponent(p)}`).join('&');
+      const res = await fetch(`${apiBase}/api/history_multi?${qs}&days=${days}`);
+      if (res.ok) {
+        const data = await res.json();
+        const loaded = {};
+        fresh.forEach((p) => {
+          loaded[`${p}_${days}`] = data[p] || [];
+          fetchedKeysRef.current.set(`${p}_${days}`, Date.now());
+        });
+        dispatch({ type: 'APPEND_HISTORY', payload: loaded });
+      }
+    } catch {
+      // Не помечаем как загруженное — попробуем при следующем обращении
+    } finally {
+      fresh.forEach((p) => historyFetchingRef.current.delete(`${p}_${days}`));
+    }
+  }, [apiBase]);
+
+  /* Готовые ряды одного проекта для графика (группировка по дням на сервере) */
+  const fetchGraphData = useCallback(async (partner, days) => {
+    try {
+      const res = await fetch(
+        `${apiBase}/api/graph_data?partner=${encodeURIComponent(partner)}&days=${days}`
+      );
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  }, [apiBase]);
+
+  /* Готовые ряды нескольких проектов (сравнение проектов) */
+  const fetchMultiGraphData = useCallback(async (partners, days) => {
+    try {
+      const qs = (partners || []).map((p) => `partners=${encodeURIComponent(p)}`).join('&');
+      if (!qs) return null;
+      const res = await fetch(`${apiBase}/api/graph_data_multi?${qs}&days=${days}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  }, [apiBase]);
+
+  /* Готовые данные «Весь прод»: ряды по проектам + суммы + gap% (сервер) */
+  const fetchGraphTotals = useCallback(async (partners, days) => {
+    try {
+      const qs = (partners || []).map((p) => `partners=${encodeURIComponent(p)}`).join('&');
+      if (!qs) return null;
+      const res = await fetch(`${apiBase}/api/graph_totals?${qs}&days=${days}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  }, [apiBase]);
 
   /* Карта приоритетов: {ownerName: bool}. true = приоритетный.
    * Если проекта нет в monitored — считаем приоритетным (появится,
@@ -379,6 +466,10 @@ export function DataProvider({ children }) {
     setInstallation: setInstallationChoice,
     isApiOffline,
     getHistory,
+    ensureHistories,
+    fetchGraphData,
+    fetchMultiGraphData,
+    fetchGraphTotals,
     priorityMap,
     updateSettings,
     clearCache,

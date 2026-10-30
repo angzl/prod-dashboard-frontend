@@ -260,7 +260,7 @@ function buildColumnGroups(columns) {
 }
 
 function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
-  const { getHistory, timeline, status, priorityMap } = useDataStore();
+  const { getHistory, timeline, status, priorityMap, ensureHistories } = useDataStore();
   const [hoverCol, setHoverCol] = useState(null);
   // Приоритет: в многопроектных таблицах (Сводка) неприоритетные проекты
   // скрыты по умолчанию и раскрываются кнопкой. В детальном режиме
@@ -340,12 +340,24 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null, rawRowsByPartner: allData, hiddenCount: hidden };
   }, [isTimeline, timeline, partners, days, getHistory, METRICS, showLowPrio, priorityMap]);
 
+  /* Ленивая загрузка истории (daily-режим): в SSE-снимке истории больше
+     нет — таблица сама запрашивает у сервера только недостающие проекты. */
+  useEffect(() => {
+    if (!isTimeline && projectList.length > 0) {
+      ensureHistories(projectList, days);
+    }
+  }, [isTimeline, projectList, days, ensureHistories]);
+
   const hasAnyData = isTimeline
     ? columns.length > 0 && projectList.some(p => {
         const rows = projectGrouped[p];
         return rows && Object.values(rows).some(v => v != null);
       })
     : Object.values(projectGrouped).some(g => Object.keys(g).length > 0);
+
+  // История ещё подгружается хотя бы по одному проекту?
+  // null = не загружено, [] = загружено, но пусто.
+  const pendingHistory = !isTimeline && projectList.some(p => getHistory(p, days) == null);
 
   const columnGroups = isTimeline ? buildColumnGroups(columns) : [];
   const multiProject = projectList.length > 1;
@@ -382,7 +394,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
 
   // Ветка «нет данных» — уже ПОСЛЕ всех хуков
   if (!hasAnyData) {
-    if (status === 'loading')
+    if (status === 'loading' || pendingHistory)
       return <div className="state-msg">⏳ Загрузка истории...</div>;
     return <div className="state-msg">Нет исторических данных в кеше</div>;
   }

@@ -1,10 +1,12 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import Plot from 'react-plotly.js';
 import { useDataStore } from '../context/DataContext';
 
 /* TotalGraphs — графики «Весь прод» с детализацией.
-   Все графики строятся из state.history (агрегация на фронте),
-   без отдельных запросов к бэкенду — работает в рамках SSE push-модели.
+   ВСЯ агрегация (группировка сырых срезов по дням, выравнивание по общей
+   шкале дат, суммы по проектам и gap%) выполняется НА СЕРВЕРЕ —
+   GET /api/graph_totals. Фронт получает готовые массивы и только
+   отрисовывает их, поэтому на слабых ПК нет фризов.
    Берём максимальный доступный период (365 дней). */
 
 const PALETTE = [
@@ -52,96 +54,49 @@ function darkLayout(title) {
   };
 }
 
-function buildDailyHistory(rawHistory) {
-  if (!rawHistory || rawHistory.length === 0) {
-    return { dates: [], active_pu: [], t0_three_days: [], bs_online: [], bs_total: [] };
-  }
-  const grouped = {};
-  rawHistory.forEach((item) => {
-    const day = item.snap_datetime.split(' ')[0];
-    if (!grouped[day] || item.snap_datetime > grouped[day].snap_datetime) {
-      grouped[day] = item;
-    }
-  });
-  const rows = Object.values(grouped).sort((a, b) =>
-    a.snap_datetime.localeCompare(b.snap_datetime)
-  );
-  return {
-    dates: rows.map((r) => r.snap_datetime.slice(0, 16)),
-    active_pu: rows.map((r) => parseFloat(r.active_pu) || 0),
-    t0_three_days: rows.map((r) => parseFloat(r.t0_three_days) || 0),
-    bs_online: rows.map((r) => parseFloat(r.bs_online) || 0),
-    bs_total: rows.map((r) => parseFloat(r.bs_total) || 0),
-  };
-}
-
 function TotalGraphs() {
-  const { partners, getHistory, status } = useDataStore();
+  const { partners, fetchGraphTotals } = useDataStore();
 
   const days = 365;
 
-  const perPartner = useMemo(() => {
-    if (!partners || partners.length === 0) return {};
-    const result = {};
-    partners.forEach((p) => {
-      const raw = getHistory(p, days);
-      if (raw && raw.length > 0) result[p] = buildDailyHistory(raw);
-    });
-    return result;
-  }, [partners, days, getHistory]);
+  /* Готовые данные с сервера: {dates, per_partner, totals} */
+  const [data, setData] = useState(null);
 
-  const allDates = useMemo(() => {
-    const set = new Set();
-    Object.values(perPartner).forEach((pd) => {
-      (pd.dates || []).forEach((d) => set.add(d));
-    });
-    return Array.from(set).sort();
-  }, [perPartner]);
+  // Стабильный ключ списка проектов (массив partners пересоздаётся при рендере)
+  const partnersKey = (partners || []).join('\u0000');
 
-  const totals = useMemo(() => {
-    const active = {}, t03 = {}, bsOn = {}, bsTot = {};
-    allDates.forEach((d) => { active[d] = 0; t03[d] = 0; bsOn[d] = 0; bsTot[d] = 0; });
-    Object.values(perPartner).forEach((pd) => {
-      (pd.dates || []).forEach((d, i) => {
-        active[d] += pd.active_pu[i] || 0;
-        t03[d] += pd.t0_three_days[i] || 0;
-        bsOn[d] += pd.bs_online[i] || 0;
-        bsTot[d] += pd.bs_total[i] || 0;
-      });
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    if (!partnersKey) return;
+    fetchGraphTotals(partnersKey.split('\u0000'), days).then((d) => {
+      if (alive) setData(d);
     });
-    const gap = allDates.map((d) => {
-      const a = active[d];
-      return a > 0 ? Math.max(0, Math.min(100, 100 - (t03[d] / a) * 100)) : 0;
-    });
-    return {
-      active_pu: allDates.map((d) => active[d]),
-      t0_three_days: allDates.map((d) => t03[d]),
-      bs_online: allDates.map((d) => bsOn[d]),
-      bs_total: allDates.map((d) => bsTot[d]),
-      gap_pct: gap,
-    };
-  }, [perPartner, allDates]);
+    return () => { alive = false; };
+  }, [partnersKey, days, fetchGraphTotals]);
 
   if (!partners || partners.length === 0)
     return <div className="state-msg">Нет проектов</div>;
-  if (status === 'loading' && Object.keys(perPartner).length === 0)
-    return <div className="state-msg">⏳ Загрузка...</div>;
+  if (!data)
+    return <div className="state-msg">⏳ Загрузка графиков...</div>;
+
+  const allDates = data.dates || [];
+  const perPartner = data.per_partner || {};
+  const totals = data.totals || {};
+  const partnerNames = Object.keys(perPartner);
+
   if (allDates.length === 0)
     return <div className="state-msg">Нет данных для графиков</div>;
 
   const plotConfig = { displayModeBar: false, responsive: true };
 
   const activeTraces = [];
-  const partnerNames = Object.keys(perPartner);
   partnerNames.forEach((partner, idx) => {
     const pd = perPartner[partner];
-    if (!pd || !pd.dates || !pd.dates.length) return;
-    const map = {};
-    pd.dates.forEach((d, i) => (map[d] = pd.active_pu[i] || 0));
-    const y = allDates.map((d) => map[d] || 0);
+    if (!pd || !pd.active_pu || !pd.active_pu.length) return;
     activeTraces.push({
       x: allDates,
-      y: y,
+      y: pd.active_pu,               // уже выровнено по общей шкале на сервере
       name: partner,
       type: 'scatter',
       mode: 'lines',
@@ -178,13 +133,10 @@ function TotalGraphs() {
   const bsTraces = [];
   partnerNames.forEach((partner, idx) => {
     const pd = perPartner[partner];
-    if (!pd || !pd.dates || !pd.dates.length) return;
-    const map = {};
-    pd.dates.forEach((d, i) => (map[d] = pd.bs_online[i] || 0));
-    const y = allDates.map((d) => map[d] || 0);
+    if (!pd || !pd.bs_online || !pd.bs_online.length) return;
     bsTraces.push({
       x: allDates,
-      y: y,
+      y: pd.bs_online,               // уже выровнено по общей шкале на сервере
       name: partner,
       type: 'scatter',
       mode: 'lines',
