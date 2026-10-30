@@ -220,11 +220,13 @@ function MonitoredProjectsSection() {
 
   const pin = () => sessionStorage.getItem('dm_admin_auth_pin') || '';
 
-  const loadData = async (refreshOwners = false) => {
+  const loadData = async () => {
     setLoading(true);
     try {
+      // Овнеры ВСЕГДА запрашиваются из БД в реальном времени (&refresh=true —
+      // бэкенд выполняет SELECT DISTINCT partner, минуя кеш процесса).
       const [ownersRes, monRes, projRes] = await Promise.all([
-        fetch(`${apiBase}/api/admin/owners?pin=${pin()}${refreshOwners ? '&refresh=true' : ''}`),
+        fetch(`${apiBase}/api/admin/owners?pin=${pin()}&refresh=true`),
         fetch(`${apiBase}/api/admin/monitored?pin=${pin()}`),
         fetch(`${apiBase}/api/admin/projects?pin=${pin()}`),
       ]);
@@ -244,7 +246,7 @@ function MonitoredProjectsSection() {
     }
   };
 
-  useEffect(() => { loadData(false); /* eslint-disable-line */ }, []);
+  useEffect(() => { loadData(); /* eslint-disable-line */ }, []);
 
   const monitoredNames = new Set(monitored.map(p => p.name));
   const available = owners.filter(o => !monitoredNames.has(o));
@@ -347,7 +349,7 @@ function MonitoredProjectsSection() {
           }}
         />
         <button
-          onClick={() => loadData(true)}
+          onClick={() => loadData()}
           disabled={loading}
           style={{
             padding: '7px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600,
