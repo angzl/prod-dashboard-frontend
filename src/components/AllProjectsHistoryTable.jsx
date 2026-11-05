@@ -259,7 +259,7 @@ function buildColumnGroups(columns) {
   return groups;
 }
 
-function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
+function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily', dropEmptyColumns = false }) {
   const { getHistory, timeline, status, priorityMap, ensureHistories } = useDataStore();
   const [hoverCol, setHoverCol] = useState(null);
   // Приоритет: в многопроектных таблицах (Сводка) неприоритетные проекты
@@ -297,11 +297,20 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     }
 
     if (isTimeline) {
-      const cols = (timeline?.columns || []).filter(Boolean);
+      let cols = (timeline?.columns || []).filter(Boolean);
       const grouped = {};
       list.forEach(partner => {
         grouped[partner] = timeline?.data?.[partner] || {};
       });
+      // dropEmptyColumns: колонки timeline строятся на бэкендe глобально
+      // (по всем партнёрам сразу). Если у показываемой группы проектов
+      // (например, инсталяций) в каком-то периоде данных нет вовсе —
+      // пустые колонки «—» скрываем, чтобы не занимали место.
+      if (dropEmptyColumns) {
+        cols = cols.filter(col =>
+          list.some(p => grouped[p]?.[col.key] != null)
+        );
+      }
       // Диапазоны для заливки — с бэкенда (timeline.ranges): они считаются
       // по ВСЕМ сырым срезам каждого партнёра (timeline.py::_compute_ranges),
       // а не по агрегированным значениям, которые показаны в таблице.
@@ -338,7 +347,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     cols.forEach(c => { if (dayTimes[c.key]) c.time = dayTimes[c.key]; });
 
     return { columns: cols, projectGrouped: grouped, projectList: list, rangesFromServer: null, rawRowsByPartner: allData, hiddenCount: hidden };
-  }, [isTimeline, timeline, partners, days, getHistory, METRICS, showLowPrio, priorityMap]);
+  }, [isTimeline, timeline, partners, days, getHistory, METRICS, showLowPrio, priorityMap, dropEmptyColumns]);
 
   /* Ленивая загрузка истории (daily-режим): в SSE-снимке истории больше
      нет — таблица сама запрашивает у сервера только недостающие проекты. */
