@@ -242,8 +242,6 @@ function AllProjectsTotalTable() {
       className="hist-wrap"
       style={{
         overflowX: 'auto',
-        overflowY: 'auto',
-        maxHeight: '70vh',
         borderRadius: 'var(--radius)',
         border: '1px solid var(--border)',
         boxShadow: 'var(--shadow)',

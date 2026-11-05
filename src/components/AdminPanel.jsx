@@ -314,8 +314,8 @@ function MonitoredProjectsSection() {
 
   const boxStyle = {
     background: 'var(--surface2)', border: '1px solid var(--border)',
-    borderRadius: 10, padding: 12, minHeight: 260, maxHeight: 420,
-    overflowY: 'auto', flex: '1 1 280px',
+    borderRadius: 10, padding: 12, minHeight: 260,
+    flex: '1 1 280px',
   };
   const listRowStyle = {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -447,7 +447,7 @@ function MonitoredProjectsSection() {
 
       {/* Инсталяции — отдельный блок (те же проекты общего списка,
           но с агрегатными метриками по всей инсталяции) */}
-      <div style={{ ...boxStyle, flex: '1 1 100%', minHeight: 'auto', maxHeight: 260, marginTop: 14 }}>
+      <div style={{ ...boxStyle, flex: '1 1 100%', minHeight: 'auto', marginTop: 14 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 10 }}>
           🏠 Инсталяции ({instProjects.length})
           <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 8 }}>

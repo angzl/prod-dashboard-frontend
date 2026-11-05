@@ -579,7 +579,7 @@ function AllProjectsHistoryTable({ partners, days = 30, mode = 'daily' }) {
     <div
       className="hist-wrap"
       style={{
-        overflowX: 'auto', overflowY: 'auto', maxHeight: '70vh',
+        overflowX: 'auto',
         borderRadius: 'var(--radius)', border: '1px solid var(--border)',
         boxShadow: 'var(--shadow)', position: 'relative', background: 'var(--surface)',
       }}
