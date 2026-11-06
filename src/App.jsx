@@ -164,7 +164,7 @@ function AppInner() {
       {/* Шапка */}
       <div className="page-header">
         <h1>
-          <img src="/favicon.svg" alt="logo" style={{ height: 30, width: 30, verticalAlign: 'middle', marginRight: 10, borderRadius: 6, objectFit: 'contain' }} />
+          <img src="/ico.png" alt="logo" style={{ height: 30, width: 30, verticalAlign: 'middle', marginRight: 10, borderRadius: 6, objectFit: 'contain' }} />
           Мониторинг v4_1
         </h1>
         <SnapshotTimeBadge />
