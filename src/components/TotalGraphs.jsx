@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from './plotlyFactory';
 import { useDataStore } from '../context/DataContext';
 
 /* TotalGraphs — графики «Весь прод» с детализацией.

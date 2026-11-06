@@ -1,5 +1,4 @@
 import React, { useState, Suspense, lazy } from 'react';
-import Select from 'react-select';
 
 import { DataProvider, useDataStore } from './context/DataContext';
 import PartnerTable       from './components/PartnerTable';
@@ -9,20 +8,27 @@ import MetricCards        from './components/MetricCards';
 import ProjectMetricCards from './components/ProjectMetricCards';
 import InstallationsBlock from './components/InstallationsBlock';
 import InstallationsHistoryTable from './components/InstallationsHistoryTable';
-import AdminPanel         from './components/AdminPanel';
 import ErrorBoundary      from './components/ErrorBoundary';
 import Skeleton           from './components/Skeleton';
 import InfoTip            from './components/InfoTip';
 import { fmtSnapDt, getLatestSnapDt } from './utils/datetime';
 import './App.css';
 
-/* Тяжёлые графические компоненты (plotly.js ~3 МБ) грузим лениво.
-   Они попадают в отдельный чанк и подгружаются только когда пользователь
-   открывает вкладки «Детализация» или «Весь прод». Вкладка
-   «Сводка» (самая частая) грузится быстро, без plotly в начальном бандле. */
+/* Тяжёлые графические компоненты (plotly ~1 МБ даже в компактном виде)
+   грузим лениво. Они попадают в отдельный чанк и подгружаются только
+   когда пользователь открывает вкладки «Детализация» или «Весь прод».
+   Вкладка «Сводка» (самая частая) грузится быстро, без plotly в начальном
+   бандле. */
 const Graph       = lazy(() => import('./components/Graph'));
 const MultiGraph  = lazy(() => import('./components/MultiGraph'));
 const TotalGraphs = lazy(() => import('./components/TotalGraphs'));
+
+/* Админка открывается редко — тоже в отдельный ленивый чанк. */
+const AdminPanel  = lazy(() => import('./components/AdminPanel'));
+
+/* react-select (~95 КБ с зависимостями) нужен только в режиме
+   «Сравнение» — не тянем его в стартовый бандл. */
+const Select = lazy(() => import('react-select'));
 
 /* ── react-select тёмная тема ─────────────────────────────── */
 const selectStyles = {
@@ -158,7 +164,7 @@ function AppInner() {
       {/* Шапка */}
       <div className="page-header">
         <h1>
-          <img src="/ico.png" alt="logo" style={{ height: 30, width: 30, verticalAlign: 'middle', marginRight: 10, borderRadius: 6, objectFit: 'contain' }} />
+          <img src="/favicon.svg" alt="logo" style={{ height: 30, width: 30, verticalAlign: 'middle', marginRight: 10, borderRadius: 6, objectFit: 'contain' }} />
           Мониторинг v4_1
         </h1>
         <SnapshotTimeBadge />
@@ -273,14 +279,16 @@ function AppInner() {
               {detailMode === 'compare' && (
               <div style={{ minWidth: 300 }}>
                 <span className="filter-label" style={{ display: 'block', marginBottom: 6 }}>Проекты для сравнения</span>
-                <Select
-                  isMulti
-                  options={partnerOptions}
-                  value={compareProjects}
-                  onChange={setCompareProjects}
-                  placeholder="Выберите проекты..."
-                  styles={selectStyles}
-                />
+                <Suspense fallback={<select disabled><option>Загрузка...</option></select>}>
+                  <Select
+                    isMulti
+                    options={partnerOptions}
+                    value={compareProjects}
+                    onChange={setCompareProjects}
+                    placeholder="Выберите проекты..."
+                    styles={selectStyles}
+                  />
+                </Suspense>
               </div>
               )}
               <div>
@@ -391,7 +399,9 @@ function AppInner() {
       {/* ══ НАСТРОЙКИ (АДМИНКА) ═════════════════════════════ */}
       {activeTab === 'admin' && (
         <div className="tab-content">
-          <AdminPanel />
+          <Suspense fallback={<Skeleton height={300} text="Загрузка настроек..." />}>
+            <AdminPanel />
+          </Suspense>
         </div>
       )}
     </div>

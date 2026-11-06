@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import Plot from 'react-plotly.js';
+import Plot from './plotlyFactory';
 import { useDataStore } from '../context/DataContext';
 
-// ── Общие настройки Plotly для тёмной темы ──────────────────────────────────
+/* ── Общие настройки Plotly для тёмной темы ─────────────────────── */
 const PLOTLY_LAYOUT_BASE = {
   xaxis: {
     tickangle: -45,
